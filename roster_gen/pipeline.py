@@ -19,7 +19,11 @@ def run(year, base_dir, out_dir=None, log=print):
     season = year
     prior = year - 1
     if out_dir is None:
-        out_dir = os.path.join(os.path.dirname(base_dir), f"BLUS31159-ROSTER-{season}")
+        out_dir = "/home/lakerh8r/Downloads/NCAA14RosterPack"
+    os.makedirs(out_dir, exist_ok=True)
+    save_name = f"BLUS31159-ROSTER-{season}"
+    save_dir = os.path.join(out_dir, "PS3", "SAVEDATA", save_name)
+    os.makedirs(save_dir, exist_ok=True)
 
     log(f"[1/6] Decrypting base save...")
     work = os.path.join("/tmp/opencode/scratchpad", f"run_{season}")
@@ -130,9 +134,9 @@ def run(year, base_dir, out_dir=None, log=print):
         f.write(new_db)
 
     log(f"[6/6] Encrypting save -> {out_dir}")
-    encrypt_save(work, out_dir, base_dir)
+    encrypt_save(work, save_dir, base_dir)
 
-    # report
+    # report + csv in the output root
     report_path = os.path.join(out_dir, "report.txt")
     with open(report_path, "w") as f:
         f.write(f"Season: {_season_str(season)}\n")
@@ -158,7 +162,9 @@ def run(year, base_dir, out_dir=None, log=print):
                 w.writerow([t["name"], p.get("first"), p.get("last"), p["pos"],
                             a.get("POVR"), a.get("PSPD"), a.get("PSTR"), a.get("PAWR"),
                             p.get("_confidence")])
-    log(f"Done. Output: {out_dir}")
+    log(f"Done. Output root: {out_dir}")
+    log(f"Save folder: {save_dir}")
+    log("Copy the 'PS3' folder from the output root to the root of your USB drive (or FTP root).")
     return out_dir
 
 
