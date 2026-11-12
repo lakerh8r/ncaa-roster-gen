@@ -1,0 +1,7 @@
+pyproject.toml
+ncaa_roster_gen.egg-info/PKG-INFO
+ncaa_roster_gen.egg-info/SOURCES.txt
+ncaa_roster_gen.egg-info/dependency_links.txt
+ncaa_roster_gen.egg-info/entry_points.txt
+ncaa_roster_gen.egg-info/requires.txt
+ncaa_roster_gen.egg-info/top_level.txt

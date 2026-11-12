@@ -1,0 +1,2 @@
+[console_scripts]
+roster-gen = roster_gen.cli:main

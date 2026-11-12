@@ -1,0 +1,32 @@
+[project]
+name = "ncaa-roster-gen"
+version = "0.1.0"
+description = "Generate NCAA Football 14 (PS3) roster saves for a given season year."
+requires-python = ">=3.11"
+dependencies = [
+  "pycryptodome>=3.20",
+  "fastapi>=0.110",
+  "uvicorn>=0.27",
+  "jinja2>=3.1",
+  "pyyaml>=6.0",
+  "httpx>=0.27",
+  "beautifulsoup4>=4.12",
+  "lxml>=5.0",
+  "pdfplumber>=0.11",
+  "pydantic>=2.6",
+  "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+roster-gen = "roster_gen.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["roster_gen*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
