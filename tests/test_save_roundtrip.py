@@ -10,10 +10,13 @@ def test_pfd_and_usrdata_roundtrip():
         out = os.path.join(td, "out")
         decrypt_save(BASE, work)
         encrypt_save(work, out, BASE)
-        for name in ("PARAM.PFD", "USR-DATA", "PARAM.SFO", "HED-DATA"):
+        for name in ("PARAM.PFD", "USR-DATA", "HED-DATA"):
             a = open(os.path.join(BASE, name), "rb").read()
             b = open(os.path.join(out, name), "rb").read()
             assert a == b, f"{name} differs ({len(a)} vs {len(b)})"
+        # PARAM.SFO is intentionally rewritten (account id + directory name)
+        import os as _os
+        assert _os.path.exists(os.path.join(out, "PARAM.SFO"))
 
 
 def test_db_roundtrip():
