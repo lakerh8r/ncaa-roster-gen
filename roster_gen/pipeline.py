@@ -164,7 +164,13 @@ def run(year, base_dir, out_dir=None, log=print):
                             p.get("_confidence")])
     log(f"Done. Output root: {out_dir}")
     log(f"Save folder: {save_dir}")
-    log("Copy the 'PS3' folder from the output root to the root of your USB drive (or FTP root).")
+    log("")
+    log("=== WHERE TO COPY ON YOUR PS3 ===")
+    log("USB drive: copy the 'PS3' folder to the ROOT of your USB drive.")
+    log("  Then on PS3: Game -> Save Data Utility (PS3) -> copy from USB to HDD.")
+    log("FTP: upload 'BLUS31159-ROSTER-...' into /dev_hdd0/home/00000001/savedata/")
+    log("  (skip the PS3/SAVEDATA wrapper for FTP)")
+    log("Then launch NCAA Football 14.")
     return out_dir
 
 

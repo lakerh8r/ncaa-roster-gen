@@ -50,7 +50,7 @@ INDEX = """<!doctype html>
     log.textContent = s.lines.join('\\n');
     log.scrollTop = log.scrollHeight;
     if (s.done) {
-      document.getElementById('status').textContent = s.error ? ('ERROR: ' + s.error) : ('Done. Output: ' + s.output);
+      document.getElementById('status').textContent = s.error ? ('ERROR: ' + s.error) : ('Done! Output: ' + s.output + '  --  Copy the PS3 folder to your USB root (or upload BLUS31159-ROSTER-* to /dev_hdd0/home/00000001/savedata/ via FTP).');
       return;
     }
     setTimeout(poll, 1000);
