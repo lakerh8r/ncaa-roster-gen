@@ -57,6 +57,21 @@ def write_sfo(path, updates):
 
 
 def update_sfo_for_save(path, folder_name, title=None, sub_title=None):
+    data = bytearray(open(path, "rb").read())
+    ver, kt, dt, n = struct.unpack("<IIII", data[4:20])
+    # find ACCOUNT_ID entry and overwrite with neutral zeros (fixed 16 bytes, no NUL)
+    for i in range(n):
+        off = 20 + i * 16
+        key_off, fmt = struct.unpack("<HH", data[off:off + 4])
+        plen, pmax, doff = struct.unpack("<III", data[off + 4:off + 16])
+        kend = data.find(b"\x00", kt + key_off)
+        key = data[kt + key_off:kend].decode("ascii", "replace")
+        if key == "ACCOUNT_ID":
+            slot = dt + doff
+            data[slot:slot + 16] = b"0" * 16
+            struct.pack_into("<I", data, off + 4, 16)
+    open(path, "wb").write(data)
+    # update the rest via normal write_sfo (strings, NUL-terminated)
     updates = {"SAVEDATA_DIRECTORY": folder_name}
     if sub_title is not None:
         updates["SUB_TITLE"] = sub_title
