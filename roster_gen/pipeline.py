@@ -15,13 +15,13 @@ def _season_str(y):
     return f"{y}-{str(y + 1)[-2:]}"
 
 
-def run(year, base_dir, out_dir=None):
+def run(year, base_dir, out_dir=None, log=print):
     season = year
     prior = year - 1
     if out_dir is None:
         out_dir = os.path.join(os.path.dirname(base_dir), f"BLUS31159-ROSTER-{season}")
 
-    print(f"[1/6] Decrypting base save...")
+    log(f"[1/6] Decrypting base save...")
     work = os.path.join("/tmp/opencode/scratchpad", f"run_{season}")
     os.makedirs(work, exist_ok=True)
     db_path, _ = decrypt_save(base_dir, work)
@@ -30,14 +30,14 @@ def run(year, base_dir, out_dir=None):
 
     base_teams = [t for t in teams(db) if t["type"] == 0]
     ncaa_names = [t["name"] for t in base_teams]
-    print(f"      {len(base_teams)} FBS teams")
+    log(f"      {len(base_teams)} FBS teams")
 
-    print(f"[2/6] Mapping teams to ESPN...")
+    log(f"[2/6] Mapping teams to ESPN...")
     tmap = build_team_map(ncaa_names)
     matched = sum(1 for v in tmap.values() if v)
-    print(f"      matched {matched}/{len(ncaa_names)}")
+    log(f"      matched {matched}/{len(ncaa_names)}")
 
-    print(f"[3/6] Scraping rosters...")
+    log(f"[3/6] Scraping rosters...")
     # base slot counts per team
     base_counts = {}
     base_pgids = {}
@@ -52,7 +52,7 @@ def run(year, base_dir, out_dir=None):
         tg = t["tgid"]
         espn_id = tmap.get(t["name"])
         slots = base_counts[tg]
-        print(f"      [{ti+1}/{len(base_teams)}] {t['name']} (slots={slots}) espn={espn_id}")
+        log(f"      [{ti+1}/{len(base_teams)}] {t['name']} (slots={slots}) espn={espn_id}")
         if not espn_id:
             # leave base players untouched
             team_to_players[tg] = []
@@ -60,7 +60,7 @@ def run(year, base_dir, out_dir=None):
         try:
             roster = espn_team_roster(espn_id)
         except Exception as e:
-            print(f"        roster fetch failed: {e}")
+            log(f"        roster fetch failed: {e}")
             team_to_players[tg] = []
             continue
         # map to NCAA positions, sort by experience then name
@@ -119,17 +119,17 @@ def run(year, base_dir, out_dir=None):
         team_to_players[tg] = chosen
         all_players.extend(chosen)
 
-    print(f"[4/6] Rating {len(all_players)} players...")
+    log(f"[4/6] Rating {len(all_players)} players...")
     rate_players(all_players)
 
-    print(f"[5/6] Writing DB...")
+    log(f"[5/6] Writing DB...")
     write_roster(db, team_to_players)
     # save db
     new_db = db.build()
     with open(os.path.join(work, "USR-DATA"), "wb") as f:
         f.write(new_db)
 
-    print(f"[6/6] Encrypting save -> {out_dir}")
+    log(f"[6/6] Encrypting save -> {out_dir}")
     encrypt_save(work, out_dir, base_dir)
 
     # report
@@ -158,7 +158,7 @@ def run(year, base_dir, out_dir=None):
                 w.writerow([t["name"], p.get("first"), p.get("last"), p["pos"],
                             a.get("POVR"), a.get("PSPD"), a.get("PSTR"), a.get("PAWR"),
                             p.get("_confidence")])
-    print(f"Done. Output: {out_dir}")
+    log(f"Done. Output: {out_dir}")
     return out_dir
 
 
