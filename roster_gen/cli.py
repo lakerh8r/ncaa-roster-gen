@@ -43,11 +43,16 @@ def cmd_copy(args):
 
 
 def cmd_run(args):
-    year = args.year
-    print(f"Season start year: {year} (season {year}-{str(year+1)[-2:]})")
-    print("run: scraping/rating not yet implemented in this build.")
-    print("Use 'roster-gen copy' to validate the save pipeline.")
-    return 0
+    from roster_gen.pipeline import run
+    base = args.base
+    out = args.out
+    try:
+        out_dir = run(args.year, base, out)
+        print(f"Output: {out_dir}")
+        return 0
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return 1
 
 
 def main(argv=None):

@@ -23,4 +23,11 @@ def index():
 
 @app.post("/generate", response_class=HTMLResponse)
 def generate(year: int = Form(...)):
-    return INDEX.format(status=f"<p>Season {year} selected. Generation pipeline not yet wired up in this build.</p>")
+    from roster_gen.pipeline import run
+    import traceback
+    try:
+        out = run(year, "/home/lakerh8r/Downloads/NCAA14RosterPack/13-14 Release Year NCAA14/PS3 end of season 2013-14 Roster posted by majesty95/PS3 end of season 2013-14 Roster posted by majesty95/PS3/SAVEDATA/BLUS31159-ROSTER-JHASLEY10", None)
+        return INDEX.format(status=f"<p>Done. Output: {out}</p>")
+    except Exception as e:
+        traceback.print_exc()
+        return INDEX.format(status=f"<p>Error: {e}</p>")
