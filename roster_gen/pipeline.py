@@ -130,6 +130,11 @@ def run(year, base_dir, out_dir=None, log=print):
     write_roster(db, team_to_players)
     # save db
     new_db = db.build()
+    # Pad to the original container size (1,433,600 bytes) with zero plaintext.
+    # The PS3 expects this full size; trailing bytes are zero-filled padding.
+    CONTAINER_SIZE = 1433600
+    if len(new_db) < CONTAINER_SIZE:
+        new_db = new_db + b"\x00" * (CONTAINER_SIZE - len(new_db))
     with open(os.path.join(work, "USR-DATA"), "wb") as f:
         f.write(new_db)
 
