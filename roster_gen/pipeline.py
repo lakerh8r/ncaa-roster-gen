@@ -70,7 +70,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False)
             log(f"        roster fetch failed: {e}")
             team_to_players[tg] = []
             continue
-        # map to NCAA positions, sort by experience then name
+        # map to NCAA positions
         cand = []
         for rp in roster:
             code = map_position(rp["pos"], rp.get("weight"))
@@ -87,7 +87,40 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False)
                 "jersey": int(rp["jersey"]) if rp.get("jersey") else 0,
                 "experience": rp.get("experience", 0) or 0,
                 "espn_id": rp["espn_id"],
+                "_class": rp.get("class", ""),
             })
+        # filter out graduated/inactive players:
+        # keep if freshman, or has 2026 stats, or underclassman (So/Jr),
+        # or senior/grad with 2025 stats (returning). Drop Sr/Gr with no recent stats.
+        filtered = []
+        for p in cand:
+            cls = (p["_class"] or "").upper()
+            is_fr = cls.startswith("FR") or (p["experience"] or 0) == 0
+            # fetch stats to check activity
+            try:
+                st = espn_player_stats(p["espn_id"])
+            except Exception:
+                st = {}
+            seasons = sorted([s for s in st.keys() if s.isdigit()], key=lambda x: int(x), reverse=True)
+            has_2026 = "2026" in st
+            has_2025 = "2025" in st
+            is_underclass = cls.startswith("SO") or cls.startswith("JR") or cls.startswith("FR")
+            is_sr_grad = cls.startswith("SR") or cls.startswith("GR") or "5" in cls or "6" in cls
+            if is_fr:
+                keep = True
+            elif has_2026:
+                keep = True
+            elif is_underclass:
+                keep = True
+            elif is_sr_grad and has_2025:
+                keep = True  # returning senior/grad
+            else:
+                keep = False  # graduated or inactive
+            if keep:
+                filtered.append(p)
+            else:
+                log(f"        filtered out (graduated/inactive): {p['first']} {p['last']} ({p['_class']})")
+        cand = filtered
         # priority sort: experienced first, then by position need
         cand.sort(key=lambda x: (-x["experience"], x["pos"]))
         # take top `slots`
