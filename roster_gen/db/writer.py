@@ -17,32 +17,57 @@ BODY_SIZE_FIELDS = ["BSAT", "BSBT", "BSCT", "BSFT", "BSGT", "BSPT",
 FACE_FIELDS = ["PGHE", "PUHE", "PHCL"]
 
 
-def _find_closest_body(base_db, pos, weight):
-    """Find the base player (same position) with closest weight; return their body/face fields."""
+_body_index = None
+_body_index_db = None
+
+
+def _build_body_index(base_db):
+    global _body_index, _body_index_db
+    if base_db is _body_index_db and _body_index is not None:
+        return _body_index
+    _body_index_db = base_db
     if base_db is None:
+        _body_index = None
         return None
     base_play = base_db.table("PLAY")
-    best = None
-    best_diff = 9999
+    idx = {}
     for i in range(base_play.current_records):
         r = base_play.record(i)
-        if base_play.get_int(r, "PPOS") != pos:
-            continue
+        pos = base_play.get_int(r, "PPOS")
         bw = base_play.get_int(r, "PWGT") + 160
-        diff = abs(bw - weight)
-        if diff < best_diff:
-            best_diff = diff
-            best = r
-    if best is None:
+        idx.setdefault(pos, []).append((bw, i))
+    for pos in idx:
+        idx[pos].sort(key=lambda x: x[0])
+    _body_index = idx
+    return idx
+
+
+def _find_closest_body(base_db, pos, weight):
+    """Find the base player (same position) with closest weight; return their body/face fields."""
+    idx = _build_body_index(base_db)
+    if idx is None or pos not in idx:
         return None
+    entries = idx[pos]
+    import bisect
+    weights = [e[0] for e in entries]
+    i = bisect.bisect_left(weights, weight)
+    candidates = []
+    if i > 0:
+        candidates.append(entries[i - 1])
+    if i < len(entries):
+        candidates.append(entries[i])
+    if not candidates:
+        return None
+    best_entry = min(candidates, key=lambda e: abs(e[0] - weight))
+    base_play = base_db.table("PLAY")
+    best_rec = base_play.record(best_entry[1])
     result = {}
     for f in base_play.fields:
         if f.is_string:
             continue
-        # copy body def, body size, face, hair color fields
         if f.name.startswith("BS") or f.name.startswith("PL") or f.name.startswith("PR") or f.name in ("PGHE", "PUHE", "PHCL", "PHIT"):
             try:
-                result[f.name] = base_play.get_int(best, f.name)
+                result[f.name] = base_play.get_int(best_rec, f.name)
             except Exception:
                 pass
     return result

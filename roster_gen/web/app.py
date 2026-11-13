@@ -12,7 +12,7 @@ DEFAULT_OUT = "/home/lakerh8r/Downloads/NCAA14RosterPack"
 STATE = {"running": False, "lines": [], "done": False, "output": "", "error": ""}
 
 
-def _run(year, base_dir, out_dir, keepname, realignment, rankings):
+def _run(year, base_dir, out_dir, keepname, realignment, rankings, skip_stats):
     global STATE
     STATE = {"running": True, "lines": [], "done": False, "output": "", "error": ""}
 
@@ -23,7 +23,7 @@ def _run(year, base_dir, out_dir, keepname, realignment, rankings):
 
     try:
         from roster_gen.pipeline import run
-        out = run(year, base_dir, out_dir, log=log, rename=not keepname, realignment=realignment, rankings=rankings, workers=10)
+        out = run(year, base_dir, out_dir, log=log, rename=not keepname, realignment=realignment, rankings=rankings, workers=10, skip_stats=skip_stats)
         STATE["output"] = out
     except Exception as e:
         import traceback
@@ -110,7 +110,8 @@ INDEX = r"""<!doctype html>
     const k = document.getElementById('keepname').checked ? 1 : 0;
     const r = document.getElementById('realignment').checked ? 1 : 0;
     const rk = document.getElementById('rankings').checked ? 1 : 0;
-    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+k+'&realignment='+r+'&rankings='+rk, {method:'POST'});
+    const ss = document.getElementById('skipstats').checked ? 1 : 0;
+    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+k+'&realignment='+r+'&rankings='+rk+'&skipstats='+ss, {method:'POST'});
     document.getElementById('status').textContent = 'Running...';
     setTimeout(poll, 500);
   }
@@ -134,6 +135,7 @@ INDEX = r"""<!doctype html>
   <label><input id="keepname" type="checkbox" checked> Keep original save name (safer for PS3)</label>
   <label><input id="realignment" type="checkbox"> Apply 2026 conference realignment (may cause schedule freeze - experimental)</label>
   <label><input id="rankings" type="checkbox" checked> Update Top 25 rankings (AP + Coaches)</label>
+  <label><input id="skipstats" type="checkbox"> Skip stats (instant, uses priors only)</label>
   <p><button onclick="start()">Generate</button></p>
   <p id="status"></p>
   <div id="log"></div>
@@ -159,10 +161,10 @@ def index():
 
 
 @app.post("/generate")
-def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int = 0, rankings: int = 1):
+def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int = 0, rankings: int = 1, skipstats: int = 0):
     if STATE["running"]:
         return JSONResponse({"ok": False, "msg": "already running"})
-    threading.Thread(target=_run, args=(year, base, out, bool(keepname), bool(realignment), bool(rankings)), daemon=True).start()
+    threading.Thread(target=_run, args=(year, base, out, bool(keepname), bool(realignment), bool(rankings), bool(skipstats)), daemon=True).start()
     return JSONResponse({"ok": True})
 
 

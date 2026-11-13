@@ -15,7 +15,7 @@ def _season_str(y):
     return f"{y}-{str(y + 1)[-2:]}"
 
 
-def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False, rankings=True, workers=10):
+def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False, rankings=True, workers=10, skip_stats=False):
     season = year
     prior = year - 1
     if out_dir is None:
@@ -176,7 +176,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                     (p["_class"] or "").upper().startswith("GR") or
                     "5" in (p["_class"] or "") or "6" in (p["_class"] or ""))]
         stats_results = {}
-        if sr_grads:
+        if sr_grads and not skip_stats:
             from concurrent.futures import ThreadPoolExecutor, as_completed
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 futures = {executor.submit(espn_player_stats, p["espn_id"], p.get("slug", "")): p for p in sr_grads}
@@ -193,7 +193,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
             is_sr_grad = cls.startswith("SR") or cls.startswith("GR") or "5" in cls or "6" in cls
             # Only fetch stats for seniors/grads (others are always kept)
             st = {}
-            if is_sr_grad:
+            if not skip_stats and is_sr_grad:
                 st = stats_results.get(p["espn_id"], {})
             p["_stats_raw"] = st
             seasons = sorted([s for s in st.keys() if s.isdigit()], key=lambda x: int(x), reverse=True)
