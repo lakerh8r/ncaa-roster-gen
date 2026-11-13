@@ -22,7 +22,7 @@ def _set_player_row(t, rec, p, attrs):
     t.set_int(rec, "POID", pgid)
 
 
-def write_roster(db, team_to_players, base_db=None, realignment=False):
+def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=None):
     play = db.table("PLAY")
     rows_by_team = {}
     for i in range(play.current_records):
@@ -122,6 +122,15 @@ def write_roster(db, team_to_players, base_db=None, realignment=False):
         team_tbl.set_int(rec, "TROF", int(round(sum(off_ovrs) / len(off_ovrs))) if off_ovrs else 70)
         team_tbl.set_int(rec, "TDRR", int(round(sum(def_ovrs) / len(def_ovrs))) if def_ovrs else 70)
         team_tbl.set_int(rec, "TRST", 70)
+
+    # Top 25 rankings (AP + Coaches)
+    if rankings:
+        for i in range(team_tbl.row_count()):
+            rec = team_tbl.record(i)
+            name = team_tbl.get_str(rec, "TDNA")
+            ap_rank, coaches_rank = rankings.get(name, (0, 0))
+            team_tbl.set_int(rec, "TMRK", ap_rank)
+            team_tbl.set_int(rec, "TCRK", coaches_rank)
 
     # Phase A realignment: update conference, division, prestige
     if realignment:

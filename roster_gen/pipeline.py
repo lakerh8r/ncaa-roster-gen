@@ -15,7 +15,7 @@ def _season_str(y):
     return f"{y}-{str(y + 1)[-2:]}"
 
 
-def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False):
+def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False, rankings=True):
     season = year
     prior = year - 1
     if out_dir is None:
@@ -237,7 +237,17 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False)
 
     log(f"[5/6] Writing DB...")
     base_db = TDBFile(open(db_path, "rb").read())
-    write_roster(db, team_to_players, base_db=base_db, realignment=realignment)
+    # fetch Top 25 rankings
+    ranking_map = None
+    if rankings:
+        log("  Fetching AP Top 25 + Coaches Poll...")
+        from roster_gen.sources.rankings import build_ranking_map
+        ncaa_names = [t["name"] for t in teams(db) if t["type"] == 0]
+        ranking_map = build_ranking_map(tmap)
+        ranked = sum(1 for v in ranking_map.values() if v[0] > 0)
+        log(f"  Ranked teams: {ranked}")
+    write_roster(db, team_to_players, base_db=base_db, realignment=realignment,
+                 rankings=ranking_map)
     # save db
     new_db = db.build()
     # Pad to the original container size (1,433,600 bytes) with zero plaintext.

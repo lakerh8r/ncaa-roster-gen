@@ -47,7 +47,7 @@ def cmd_run(args):
     base = args.base
     out = args.out
     try:
-        out_dir = run(args.year, base, out, rename=not args.keep_name, realignment=args.realignment)
+        out_dir = run(args.year, base, out, rename=not args.keep_name, realignment=args.realignment, rankings=not args.no_rankings)
         print(f"Output: {out_dir}")
         return 0
     except Exception as e:
@@ -73,6 +73,7 @@ def main(argv=None):
     sp.add_argument("--out", default=None)
     sp.add_argument("--keep-name", action="store_true", help="keep original save name (safer for PS3)")
     sp.add_argument("--realignment", action="store_true", help="apply 2026 conference realignment (Phase A)")
+    sp.add_argument("--no-rankings", action="store_true", help="skip Top 25 ranking updates")
     sp.set_defaults(func=cmd_run)
     sp = sub.add_parser("serve", help="run the local web UI")
     sp.add_argument("--port", type=int, default=8765)
