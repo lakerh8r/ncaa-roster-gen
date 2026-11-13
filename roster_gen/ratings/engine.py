@@ -136,33 +136,37 @@ def _production_value(pos, stats):
     return (stats.get("tackles", 0) or 0) * 0.5 + (stats.get("sacks", 0) or 0) * 3.0 + (stats.get("interceptions", 0) or 0) * 4.0
 
 
-def _blend_stats(cur, prior):
-    """Blend current-season and prior-season stat dicts with 60/40."""
+def _blend_stats(cur, prior, current_weight=0.6):
+    """Blend current-season and prior-season stat dicts."""
     if not cur and not prior:
         return {}
     if not cur:
         return dict(prior or {})
     if not prior:
         return dict(cur)
+    prior_weight = 1.0 - current_weight
     out = {}
     keys = set(cur) | set(prior)
     for k in keys:
         a = cur.get(k, 0) or 0
         b = prior.get(k, 0) or 0
-        # only blend numeric
         try:
-            out[k] = 0.6 * float(a) + 0.4 * float(b)
+            out[k] = current_weight * float(a) + prior_weight * float(b)
         except (ValueError, TypeError):
             out[k] = a if a else b
     return out
 
 
-def rate_players(players):
+def rate_players(players, current_weight=0.6):
     """Given a list of player dicts (with 'pos', 'stats' (current), 'prior_stats',
-    'experience', 'height', 'weight'), return list of (player, attr_dict)."""
+    'experience', 'height', 'weight'), return list of (player, attr_dict).
+
+    current_weight: weight for current-season stats in the blend (0.0 = prior only).
+    """
     # blend stats
     for p in players:
-        p["_stats"] = _blend_stats(p.get("stats", {}), p.get("prior_stats", {}))
+        p["_stats"] = _blend_stats(p.get("stats", {}), p.get("prior_stats", {}),
+                                    current_weight=current_weight)
 
     # compute production scores per position for percentile ranking
     by_pos = {}

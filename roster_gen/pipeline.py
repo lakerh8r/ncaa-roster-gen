@@ -163,17 +163,17 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False)
             except Exception:
                 st = {}
             seasons = sorted([s for s in st.keys() if s.isdigit()], key=lambda x: int(x), reverse=True)
-            has_2026 = "2026" in st
-            has_2025 = "2025" in st
+            has_current = str(season) in st
+            has_prior = str(prior) in st
             is_underclass = cls.startswith("SO") or cls.startswith("JR") or cls.startswith("FR")
             is_sr_grad = cls.startswith("SR") or cls.startswith("GR") or "5" in cls or "6" in cls
             if is_fr:
                 keep = True
-            elif has_2026:
+            elif has_current:
                 keep = True
             elif is_underclass:
                 keep = True
-            elif is_sr_grad and has_2025:
+            elif is_sr_grad and has_prior:
                 keep = True  # returning senior/grad
             else:
                 keep = False  # graduated or inactive
@@ -220,8 +220,20 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False)
         team_to_players[tg] = chosen
         all_players.extend(chosen)
 
+    # Check if any player has current-season stats
+    has_current_stats = any(str(season) in p.get("stats", {}) for p in all_players)
+    if not has_current_stats:
+        log(f"  WARNING: No {season} stats found. Using {prior} stats only (100% prior season).")
+        log(f"  This is normal for pre-season runs.")
+        current_weight = 0.0
+    else:
+        current_weight = 0.6
+    # Check if ESPN roster seems stale (no freshmen for a future season)
+    freshmen_count = sum(1 for p in all_players if (p.get("_class") or "").upper().startswith("FR") or (p.get("experience") or 0) == 0)
+    if season > 2026 and freshmen_count == 0:
+        log(f"  WARNING: No freshmen found. ESPN roster may not be updated for {season} yet.")
     log(f"[4/6] Rating {len(all_players)} players...")
-    rate_players(all_players)
+    rate_players(all_players, current_weight=current_weight)
 
     log(f"[5/6] Writing DB...")
     base_db = TDBFile(open(db_path, "rb").read())
