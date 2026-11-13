@@ -132,21 +132,13 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
             team_tbl.set_int(rec, "TMRK", ap_rank)
             team_tbl.set_int(rec, "TCRK", coaches_rank)
 
-    # Phase A realignment: update conference, division, prestige
+    # Phase A realignment (minimal): update conference only
     if realignment:
-        from roster_gen.db.conferences import get_conference_id, prestige_for
+        from roster_gen.db.conferences import get_conference_id
         for i in range(team_tbl.row_count()):
             rec = team_tbl.record(i)
-            tgid = team_tbl.get_int(rec, "TGID")
-            # find team name
             name = team_tbl.get_str(rec, "TDNA")
             cg = get_conference_id(name)
             if cg is not None:
                 team_tbl.set_int(rec, "CGID", cg)
-            # keep original division (don't change DGID — game's scheduler
-            # expects the original division structure)
-            # prestige
-            ps = team_to_players.get(tgid, [])
-            ovrs = [p.get("_attrs", {}).get("POVR", 70) for p in ps]
-            avg_ovr = (sum(ovrs) / len(ovrs)) if ovrs else 70
-            team_tbl.set_int(rec, "TPRX", prestige_for(name, avg_ovr))
+            # leave DGID, TPRX, and all other fields unchanged
