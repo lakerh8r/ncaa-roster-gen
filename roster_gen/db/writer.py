@@ -128,9 +128,11 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
         for i in range(team_tbl.row_count()):
             rec = team_tbl.record(i)
             name = team_tbl.get_str(rec, "TDNA")
-            ap_rank, coaches_rank = rankings.get(name, (0, 0))
-            team_tbl.set_int(rec, "TMRK", ap_rank)
-            team_tbl.set_int(rec, "TCRK", coaches_rank)
+            if name in rankings:
+                ap_rank, coaches_rank = rankings[name]
+                team_tbl.set_int(rec, "TMRK", ap_rank)
+                team_tbl.set_int(rec, "TCRK", coaches_rank)
+            # else: leave original TMRK/TCRK unchanged
 
     # Phase A realignment (minimal): update conference only
     if realignment:

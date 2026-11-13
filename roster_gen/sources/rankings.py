@@ -64,7 +64,14 @@ def build_ranking_map(ncaa_to_espn):
     result = {}
     for name, espn_id in ncaa_to_espn.items():
         if espn_id is None:
-            result[name] = (0, 0)
+            result[name] = (26, 26)  # unranked (values >25 are not displayed)
             continue
-        result[name] = (ap.get(espn_id, 0), coaches.get(espn_id, 0))
+        ap_rank = ap.get(espn_id, 0)
+        coaches_rank = coaches.get(espn_id, 0)
+        # 0 means unranked in ESPN; use 26 so the game doesn't show "#0"
+        if ap_rank == 0:
+            ap_rank = 26
+        if coaches_rank == 0:
+            coaches_rank = 26
+        result[name] = (ap_rank, coaches_rank)
     return result
