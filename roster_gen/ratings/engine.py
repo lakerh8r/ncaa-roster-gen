@@ -59,12 +59,12 @@ def _speed_estimate(pos, weight, height, experience, stats):
     # production proxy: yards per touch
     ypt = None
     if stats:
-        rec_yds = stats.get("receivingYards") or stats.get("YDS", 0) or 0
-        car = stats.get("rushingAttempts") or stats.get("CAR", 0) or 0
-        rec = stats.get("receptions") or stats.get("REC", 0) or 0
+        rec_yds = _n(stats.get("receivingYards")) or _n(stats.get("YDS", 0))
+        car = _n(stats.get("rushingAttempts")) or _n(stats.get("CAR", 0))
+        rec = _n(stats.get("receptions")) or _n(stats.get("REC", 0))
         touches = car + rec
         if touches > 0:
-            ypt = ( (stats.get("rushingYards") or 0) + (stats.get("receivingYards") or 0) ) / touches
+            ypt = ( _n(stats.get("rushingYards")) + _n(stats.get("receivingYards")) ) / touches
             if ypt > 12:
                 base += 4
             elif ypt > 8:
@@ -94,7 +94,7 @@ def _awareness_estimate(pos, experience, stats):
     # production consistency proxy
     if stats:
         # games played proxy via receptions/carries
-        touches = (stats.get("receptions", 0) or 0) + (stats.get("rushingAttempts", 0) or 0) + (stats.get("completions", 0) or 0)
+        touches = _n(stats.get("receptions", 0)) + _n(stats.get("rushingAttempts", 0)) + _n(stats.get("completions", 0))
         if touches > 50:
             base += 8
         elif touches > 20:
@@ -103,37 +103,47 @@ def _awareness_estimate(pos, experience, stats):
     return _clamp(base, 45, 97)
 
 
+def _n(v):
+    """Safe numeric conversion."""
+    if v is None:
+        return 0.0
+    try:
+        return float(str(v).replace(",", ""))
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def _production_value(pos, stats):
     """Return a single production score used for percentile ranking within position."""
     if not stats:
         return 0.0
     if pos == 0:  # QB
-        yds = stats.get("passingYards", 0) or stats.get("YDS", 0) or 0
-        td = stats.get("passingTouchdowns", 0) or stats.get("TD", 0) or 0
-        ints = stats.get("interceptions", 0) or 0
-        comp = stats.get("completions", 0) or 0
-        att = stats.get("passingAttempts", 0) or stats.get("ATT", 0) or 0
+        yds = _n(stats.get("passingYards", 0)) or _n(stats.get("YDS", 0))
+        td = _n(stats.get("passingTouchdowns", 0)) or _n(stats.get("TD", 0))
+        ints = _n(stats.get("interceptions", 0))
+        comp = _n(stats.get("completions", 0))
+        att = _n(stats.get("passingAttempts", 0)) or _n(stats.get("ATT", 0))
         cmp_pct = (comp / att * 100) if att else 50
         return yds * 0.001 + td * 2.0 - ints * 1.5 + cmp_pct * 0.1
     if pos in (1, 2):  # RB/FB
-        ry = stats.get("rushingYards", 0) or stats.get("YDS", 0) or 0
-        rt = stats.get("rushingTouchdowns", 0) or stats.get("TD", 0) or 0
-        car = stats.get("rushingAttempts", 0) or stats.get("CAR", 0) or 1
-        rec = stats.get("receptions", 0) or 0
-        rec_y = stats.get("receivingYards", 0) or 0
+        ry = _n(stats.get("rushingYards", 0)) or _n(stats.get("YDS", 0))
+        rt = _n(stats.get("rushingTouchdowns", 0)) or _n(stats.get("TD", 0))
+        car = _n(stats.get("rushingAttempts", 0)) or _n(stats.get("CAR", 0)) or 1
+        rec = _n(stats.get("receptions", 0))
+        rec_y = _n(stats.get("receivingYards", 0))
         return ry * 0.002 + rt * 2.0 + (rec_y * 0.001) + rec * 0.3 + (ry / car if car else 0) * 0.5
     if pos == 3:  # WR
-        rec = stats.get("receptions", 0) or 0
-        yds = stats.get("receivingYards", 0) or stats.get("YDS", 0) or 0
-        td = stats.get("receivingTouchdowns", 0) or stats.get("TD", 0) or 0
+        rec = _n(stats.get("receptions", 0))
+        yds = _n(stats.get("receivingYards", 0)) or _n(stats.get("YDS", 0))
+        td = _n(stats.get("receivingTouchdowns", 0)) or _n(stats.get("TD", 0))
         return rec * 0.5 + yds * 0.002 + td * 2.5
     if pos == 4:  # TE
-        rec = stats.get("receptions", 0) or 0
-        yds = stats.get("receivingYards", 0) or 0
-        td = stats.get("receivingTouchdowns", 0) or 0
+        rec = _n(stats.get("receptions", 0))
+        yds = _n(stats.get("receivingYards", 0))
+        td = _n(stats.get("receivingTouchdowns", 0))
         return rec * 0.6 + yds * 0.002 + td * 2.5
     # defense / OL / K / P: use snap/experience proxy
-    return (stats.get("tackles", 0) or 0) * 0.5 + (stats.get("sacks", 0) or 0) * 3.0 + (stats.get("interceptions", 0) or 0) * 4.0
+    return (_n(stats.get("tackles", 0))) * 0.5 + (_n(stats.get("sacks", 0))) * 3.0 + (_n(stats.get("interceptions", 0))) * 4.0
 
 
 def _blend_stats(cur, prior, current_weight=0.6):

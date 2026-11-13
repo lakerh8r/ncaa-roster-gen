@@ -285,7 +285,12 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         # experienced) at the top of the depth chart.
         def _depth_key(p):
             st = p.get("stats", {}) or {}
-            touches = (st.get("receptions", 0) or 0) + (st.get("rushingAttempts", 0) or 0) + (st.get("completions", 0) or 0) + (st.get("tackles", 0) or 0)
+            def _num(v):
+                try:
+                    return float(str(v).replace(",", "")) if v is not None else 0
+                except (ValueError, TypeError):
+                    return 0
+            touches = _num(st.get("receptions", 0)) + _num(st.get("rushingAttempts", 0)) + _num(st.get("completions", 0)) + _num(st.get("tackles", 0))
             jersey_priority = 0 if p.get("_had_jersey", False) else 1
             return (jersey_priority, -touches, -(p.get("experience", 0) or 0))
         chosen.sort(key=_depth_key)
