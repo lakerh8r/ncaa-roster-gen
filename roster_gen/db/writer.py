@@ -22,7 +22,7 @@ def _set_player_row(t, rec, p, attrs):
     t.set_int(rec, "POID", pgid)
 
 
-def write_roster(db, team_to_players, base_db=None):
+def write_roster(db, team_to_players, base_db=None, realignment=False):
     play = db.table("PLAY")
     rows_by_team = {}
     for i in range(play.current_records):
@@ -122,3 +122,22 @@ def write_roster(db, team_to_players, base_db=None):
         team_tbl.set_int(rec, "TROF", int(round(sum(off_ovrs) / len(off_ovrs))) if off_ovrs else 70)
         team_tbl.set_int(rec, "TDRR", int(round(sum(def_ovrs) / len(def_ovrs))) if def_ovrs else 70)
         team_tbl.set_int(rec, "TRST", 70)
+
+    # Phase A realignment: update conference, division, prestige
+    if realignment:
+        from roster_gen.db.conferences import get_conference_id, prestige_for
+        for i in range(team_tbl.row_count()):
+            rec = team_tbl.record(i)
+            tgid = team_tbl.get_int(rec, "TGID")
+            # find team name
+            name = team_tbl.get_str(rec, "TDNA")
+            cg = get_conference_id(name)
+            if cg is not None:
+                team_tbl.set_int(rec, "CGID", cg)
+            # no divisions in 2026
+            team_tbl.set_int(rec, "DGID", 30)
+            # prestige
+            ps = team_to_players.get(tgid, [])
+            ovrs = [p.get("_attrs", {}).get("POVR", 70) for p in ps]
+            avg_ovr = (sum(ovrs) / len(ovrs)) if ovrs else 70
+            team_tbl.set_int(rec, "TPRX", prestige_for(name, avg_ovr))

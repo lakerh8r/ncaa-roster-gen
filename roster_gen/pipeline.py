@@ -15,7 +15,7 @@ def _season_str(y):
     return f"{y}-{str(y + 1)[-2:]}"
 
 
-def run(year, base_dir, out_dir=None, log=print, rename=True):
+def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False):
     season = year
     prior = year - 1
     if out_dir is None:
@@ -131,7 +131,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True):
 
     log(f"[5/6] Writing DB...")
     base_db = TDBFile(open(db_path, "rb").read())
-    write_roster(db, team_to_players, base_db=base_db)
+    write_roster(db, team_to_players, base_db=base_db, realignment=realignment)
     # save db
     new_db = db.build()
     # Pad to the original container size (1,433,600 bytes) with zero plaintext.

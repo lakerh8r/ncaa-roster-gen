@@ -12,7 +12,7 @@ DEFAULT_OUT = "/home/lakerh8r/Downloads/NCAA14RosterPack"
 STATE = {"running": False, "lines": [], "done": False, "output": "", "error": ""}
 
 
-def _run(year, base_dir, out_dir, keepname):
+def _run(year, base_dir, out_dir, keepname, realignment):
     global STATE
     STATE = {"running": True, "lines": [], "done": False, "output": "", "error": ""}
 
@@ -23,7 +23,7 @@ def _run(year, base_dir, out_dir, keepname):
 
     try:
         from roster_gen.pipeline import run
-        out = run(year, base_dir, out_dir, log=log, rename=not keepname)
+        out = run(year, base_dir, out_dir, log=log, rename=not keepname, realignment=realignment)
         STATE["output"] = out
     except Exception as e:
         import traceback
@@ -108,7 +108,8 @@ INDEX = r"""<!doctype html>
     const o = document.getElementById('out').value;
     const b = document.getElementById('base').value;
     const k = document.getElementById('keepname').checked ? 1 : 0;
-    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+k, {method:'POST'});
+    const r = document.getElementById('realignment').checked ? 1 : 0;
+    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+k+'&realignment='+r, {method:'POST'});
     document.getElementById('status').textContent = 'Running...';
     setTimeout(poll, 500);
   }
@@ -130,6 +131,7 @@ INDEX = r"""<!doctype html>
   </label>
   <label>Season start year (e.g. 2026): <input id="year" type="number" value="2026"></label>
   <label><input id="keepname" type="checkbox" checked> Keep original save name (safer for PS3)</label>
+  <label><input id="realignment" type="checkbox"> Apply 2026 conference realignment (Phase A)</label>
   <p><button onclick="start()">Generate</button></p>
   <p id="status"></p>
   <div id="log"></div>
@@ -155,10 +157,10 @@ def index():
 
 
 @app.post("/generate")
-def generate(year: int, out: str, base: str, keepname: int = 0):
+def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int = 0):
     if STATE["running"]:
         return JSONResponse({"ok": False, "msg": "already running"})
-    threading.Thread(target=_run, args=(year, base, out, bool(keepname)), daemon=True).start()
+    threading.Thread(target=_run, args=(year, base, out, bool(keepname), bool(realignment)), daemon=True).start()
     return JSONResponse({"ok": True})
 
 
