@@ -11,7 +11,7 @@ DEFAULT_OUT = "/home/lakerh8r/Downloads/NCAA14RosterPack"
 STATE = {"running": False, "lines": [], "done": False, "output": "", "error": ""}
 
 
-def _run(year, out_dir):
+def _run(year, out_dir, keepname=False):
     global STATE
     STATE = {"running": True, "lines": [], "done": False, "output": "", "error": ""}
 
@@ -22,7 +22,7 @@ def _run(year, out_dir):
 
     try:
         from roster_gen.pipeline import run
-        out = run(year, BASE_SAVE, out_dir, log=log)
+        out = run(year, BASE_SAVE, out_dir, log=log, rename=not keepname)
         STATE["output"] = out
     except Exception as e:
         import traceback
@@ -58,7 +58,8 @@ INDEX = """<!doctype html>
   function start() {
     const y = document.getElementById('year').value;
     const o = document.getElementById('out').value;
-    fetch('/generate?year='+y+'&out='+encodeURIComponent(o), {method:'POST'});
+    const k = document.getElementById('keepname').checked ? 1 : 0;
+    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&keepname='+k, {method:'POST'});
     document.getElementById('status').textContent = 'Running...';
     setTimeout(poll, 500);
   }
@@ -68,6 +69,7 @@ INDEX = """<!doctype html>
   <h1>NCAA Roster Generator</h1>
   <label>Season start year (e.g. 2026): <input id="year" type="number" value="2026"></label>
   <label>Output folder: <input id="out" type="text" value="__DEFAULT_OUT__" style="width:600px"></label>
+  <label><input id="keepname" type="checkbox"> Keep original save name (safer for PS3, recommended if having issues)</label>
   <p><button onclick="start()">Generate</button></p>
   <p id="status"></p>
   <div id="log"></div>
@@ -80,10 +82,10 @@ def index():
 
 
 @app.post("/generate")
-def generate(year: int, out: str):
+def generate(year: int, out: str, keepname: int = 0):
     if STATE["running"]:
         return JSONResponse({"ok": False, "msg": "already running"})
-    threading.Thread(target=_run, args=(year, out), daemon=True).start()
+    threading.Thread(target=_run, args=(year, out, bool(keepname)), daemon=True).start()
     return JSONResponse({"ok": True})
 
 

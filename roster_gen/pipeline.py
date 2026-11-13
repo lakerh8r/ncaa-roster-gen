@@ -15,13 +15,16 @@ def _season_str(y):
     return f"{y}-{str(y + 1)[-2:]}"
 
 
-def run(year, base_dir, out_dir=None, log=print):
+def run(year, base_dir, out_dir=None, log=print, rename=True):
     season = year
     prior = year - 1
     if out_dir is None:
         out_dir = "/home/lakerh8r/Downloads/NCAA14RosterPack"
     os.makedirs(out_dir, exist_ok=True)
-    save_name = f"BLUS31159-ROSTER-{season}"
+    if rename:
+        save_name = f"BLUS31159-ROSTER-{season}"
+    else:
+        save_name = "BLUS31159-ROSTER-JHASLEY10"
     save_dir = os.path.join(out_dir, "PS3", "SAVEDATA", save_name)
     os.makedirs(save_dir, exist_ok=True)
 
@@ -143,7 +146,27 @@ def run(year, base_dir, out_dir=None, log=print):
     # Set ACCOUNT_ID to the user's own PS3 account (from their save) so the
     # PS3 recognizes the save as theirs. Falls back to neutral zeros if unknown.
     user_account = "279a69666b28e2e7"
-    encrypt_save(work, save_dir, base_dir, sfo_source_dir=None, account_id=user_account)
+    if rename:
+        encrypt_save(work, save_dir, base_dir, sfo_source_dir=None, account_id=user_account)
+    else:
+        # Keep original PARAM.SFO byte-identical (no rename, no account change)
+        import shutil
+        shutil.copy2(os.path.join(base_dir, "PARAM.SFO"), os.path.join(save_dir, "PARAM.SFO"))
+        # still need to re-encrypt USR-DATA and rebuild PFD
+        from roster_gen.ps3.save import encrypt_save as _es
+        # call a minimal version: just encrypt + rebuild PFD, don't touch SFO
+        from roster_gen.ps3.pfd import PFD
+        pfd = PFD(base_dir)
+        with open(os.path.join(work, "USR-DATA"), "rb") as f:
+            plain = f.read()
+        enc = pfd.encrypt_file("USR-DATA", plain)
+        with open(os.path.join(save_dir, "USR-DATA"), "wb") as f:
+            f.write(enc)
+        for name in ("HED-DATA", "ICON0.PNG"):
+            src = os.path.join(base_dir, name)
+            if os.path.exists(src):
+                shutil.copy2(src, os.path.join(save_dir, name))
+        pfd.rebuild(save_dir, {"USR-DATA": enc})
 
     # report + csv in the output root
     report_path = os.path.join(out_dir, "report.txt")
