@@ -2,6 +2,8 @@
 import os
 import json
 import time
+from datetime import datetime
+
 from roster_gen.ps3.save import decrypt_save, encrypt_save
 from roster_gen.eadb import TDBFile
 from roster_gen.db.roster import teams, players
@@ -10,6 +12,18 @@ from roster_gen.sources.espn import espn_team_roster, espn_player_stats, map_pos
 from roster_gen.sources.team_map import build_team_map
 from roster_gen.ratings.engine import rate_players
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+def _ts():
+    return datetime.now().strftime("%H:%M:%S")
+
+
+def _dur(seconds):
+    """Human friendly duration."""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, secs = divmod(seconds, 60)
+    return f"{int(minutes)}m {secs:.0f}s"
 
 
 def _season_str(y):
@@ -42,7 +56,28 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     save_dir = os.path.join(out_dir, "PS3", "SAVEDATA", save_name)
     os.makedirs(save_dir, exist_ok=True)
 
-    log(f"[1/6] Decrypting base save...")
+    _t0 = time.time()
+    log_lines = []
+    _orig_log = log
+
+    def _log(msg=""):
+        line = f"[{_ts()}] {msg}" if msg else ""
+        log_lines.append(line)
+        _orig_log(line)
+
+    log = _log
+
+    _step_t = {"last": _t0}
+    step_times = []
+
+    def _mark(label):
+        now = time.time()
+        seconds = now - _step_t["last"]
+        step_times.append((label, seconds))
+        log(f"  --> {label} completed in {_dur(seconds)}")
+        _step_t["last"] = now
+
+    log("[1/6] Decrypting base save...")
     work = os.path.join("/tmp/opencode/scratchpad", f"run_{season}")
     os.makedirs(work, exist_ok=True)
     db_path, _ = decrypt_save(base_dir, work)
@@ -52,11 +87,13 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     base_teams = [t for t in teams(db) if t["type"] == 0]
     ncaa_names = [t["name"] for t in base_teams]
     log(f"      {len(base_teams)} FBS teams")
+    _mark("Step 1: decrypt base save")
 
-    log(f"[2/6] Mapping teams to ESPN...")
+    log("[2/6] Mapping teams to ESPN...")
     tmap = build_team_map(ncaa_names)
     matched = sum(1 for v in tmap.values() if v)
     log(f"      matched {matched}/{len(ncaa_names)}")
+    _mark("Step 2: map teams")
 
     # base slot counts + pgids
     base_counts = {}
@@ -66,7 +103,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         base_counts[t["tgid"]] = len(ps)
         base_pgids[t["tgid"]] = [p["pgid"] for p in ps]
 
-    log(f"[3/6] Scraping rosters...")
+    log("[3/6] Scraping rosters...")
     log(f"  Fetching {len(base_teams)} rosters in parallel ({workers} workers)...")
     roster_cache = {}
     teams_with_espn = [(t, tmap.get(t["name"])) for t in base_teams if tmap.get(t["name"])]
@@ -322,6 +359,8 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         team_to_players[tg] = chosen
         all_players.extend(chosen)
 
+    _mark("Step 3: scrape rosters")
+
     log(f"[4/6] Rating {len(all_players)} players...")
     has_current_stats = any(p.get("stats") for p in all_players)
     if not has_current_stats:
@@ -334,8 +373,9 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     if season > 2026 and freshmen_count == 0:
         log(f"  WARNING: No freshmen found. ESPN roster may not be updated for {season} yet.")
     rate_players(all_players, current_weight=current_weight)
+    _mark("Step 4: rate players")
 
-    log(f"[5/6] Writing DB...")
+    log("[5/6] Writing DB...")
     base_db = TDBFile(open(db_path, "rb").read())
     ranking_map = None
     if rankings:
@@ -346,10 +386,12 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         ranking_map = build_ranking_map(tmap2)
         ranked = sum(1 for v in ranking_map.values() if v[0] > 0)
         log(f"  Ranked teams: {ranked}")
+        _mark("Step 5a: fetch Top 25 polls")
     log(f"  Writing {len(all_players)} players and depth charts...")
     write_roster(db, team_to_players, base_db=base_db, realignment=realignment,
                  rankings=ranking_map, log=log)
     log("  Writing team ratings and conference data...")
+    _mark("Step 5: write DB")
 
     log(f"[6/6] Encrypting save -> {out_dir}")
     new_db = db.build()
@@ -360,14 +402,51 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         f.write(new_db)
     from roster_gen.ps3.save import encrypt_save
     encrypt_save(work, save_dir, base_dir, sfo_source_dir=None, account_id=None)
+    _mark("Step 6: encrypt save")
+
+    elapsed = time.time() - _t0
+    log(f"Done. Output root: {out_dir}")
+    log(f"Save folder: {save_dir}")
+    log(f"Total time: {_dur(elapsed)}")
+    log("")
+    log("=== WHERE TO COPY ON YOUR PS3 ===")
+    log("USB drive: copy the 'PS3' folder to the ROOT of your USB drive.")
+    log("  Then on PS3: Game -> Save Data Utility (PS3) -> copy from USB to HDD.")
+    log("FTP: upload 'BLUS31159-ROSTER-...' into /dev_hdd0/home/00000001/savedata/")
+    log("  (skip the PS3/SAVEDATA wrapper for FTP)")
+    log("Then launch NCAA Football 14.")
 
     # report + csv
     report_path = os.path.join(out_dir, "report.txt")
     conf = {}
     for p in all_players:
         conf[p.get("_confidence", "?")] = conf.get(p.get("_confidence", "?"), 0) + 1
+    bar = "=" * 60
     with open(report_path, "w") as f:
+        f.write("NCAA Football 14 Roster Generator - Run Log\n")
+        f.write(bar + "\n")
         f.write(f"Season: {_season_str(season)}\n")
+        f.write("Started: " + datetime.fromtimestamp(_t0).strftime("%Y-%m-%d %H:%M:%S") + "\n")
+        f.write("Finished: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+        f.write(bar + "\n\n")
+
+        # full timestamped log
+        for line in log_lines:
+            f.write(line + "\n")
+
+        # step timings
+        f.write("\n" + bar + "\n")
+        f.write("STEP TIMINGS\n")
+        f.write("-" * 60 + "\n")
+        for label, seconds in step_times:
+            dots = "." * max(2, 38 - len(label))
+            f.write(f"{label} {dots} {_dur(seconds)}\n")
+        f.write(f"{'TOTAL':<38} {_dur(elapsed)}\n")
+        f.write(bar + "\n\n")
+
+        # summary
+        f.write("SUMMARY\n")
+        f.write("-" * 60 + "\n")
         f.write(f"Teams: {len(base_teams)}\n")
         f.write(f"Players rated: {len(all_players)}\n")
         f.write(f"Matched to ESPN: {matched}/{len(ncaa_names)}\n")
@@ -387,15 +466,6 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                 w.writerow([t["name"], p.get("first"), p.get("last"), p["pos"],
                             a.get("POVR"), a.get("PSPD"), a.get("PSTR"), a.get("PAWR"),
                             p.get("_confidence")])
-    log(f"Done. Output root: {out_dir}")
-    log(f"Save folder: {save_dir}")
-    log("")
-    log("=== WHERE TO COPY ON YOUR PS3 ===")
-    log("USB drive: copy the 'PS3' folder to the ROOT of your USB drive.")
-    log("  Then on PS3: Game -> Save Data Utility (PS3) -> copy from USB to HDD.")
-    log("FTP: upload 'BLUS31159-ROSTER-...' into /dev_hdd0/home/00000001/savedata/")
-    log("  (skip the PS3/SAVEDATA wrapper for FTP)")
-    log("Then launch NCAA Football 14.")
     return out_dir
 
 
