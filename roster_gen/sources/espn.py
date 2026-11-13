@@ -37,7 +37,7 @@ def _cached(key, fetcher, ttl=86400 * 7):
 def espn_teams():
     """Return list of {id, name, abbreviation, location} for all CFB teams."""
     def fetch():
-        r = httpx.get("https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?limit=500", timeout=30)
+        r = httpx.get("https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?limit=1000", timeout=30)
         r.raise_for_status()
         d = r.json()
         out = []
