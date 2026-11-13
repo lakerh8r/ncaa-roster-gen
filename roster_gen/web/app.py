@@ -132,7 +132,7 @@ INDEX = r"""<!doctype html>
   </label>
   <label>Season start year (e.g. 2026): <input id="year" type="number" value="2026"></label>
   <label><input id="keepname" type="checkbox" checked> Keep original save name (safer for PS3)</label>
-  <label><input id="realignment" type="checkbox"> Apply 2026 conference realignment</label>
+  <label><input id="realignment" type="checkbox"> Apply 2026 conference realignment (may cause schedule freeze - experimental)</label>
   <label><input id="rankings" type="checkbox" checked> Update Top 25 rankings (AP + Coaches)</label>
   <p><button onclick="start()">Generate</button></p>
   <p id="status"></p>
