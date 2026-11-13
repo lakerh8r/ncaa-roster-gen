@@ -236,10 +236,15 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                 if assigned is not None:
                     p["jersey"] = assigned
                     used_numbers.add(assigned)
-        # sort: players with original jersey numbers first (by experience),
-        # then those who got assigned numbers (lower on depth chart)
-        chosen.sort(key=lambda p: (0 if p.get("_had_jersey", False) else 1,
-                                   -(p.get("experience", 0) or 0)))
+        # sort: players with original jersey numbers first, then by production
+        # (stats volume) then experience. This puts starters (most productive/
+        # experienced) at the top of the depth chart.
+        def _depth_key(p):
+            st = p.get("stats", {}) or {}
+            touches = (st.get("receptions", 0) or 0) + (st.get("rushingAttempts", 0) or 0) + (st.get("completions", 0) or 0) + (st.get("tackles", 0) or 0)
+            jersey_priority = 0 if p.get("_had_jersey", False) else 1
+            return (jersey_priority, -touches, -(p.get("experience", 0) or 0))
+        chosen.sort(key=_depth_key)
         # assign pgids from base slots
         pgids = base_pgids[tg]
         for i, p in enumerate(chosen):
