@@ -129,6 +129,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                 "jersey": int(rp["jersey"]) if rp.get("jersey") else 0,
                 "experience": rp.get("experience", 0) or 0,
                 "espn_id": rp["espn_id"], "_class": rp.get("class", ""),
+                "_status": rp.get("status", "active"),
             })
 
         # distribute broad-label players to fill base position counts
@@ -162,6 +163,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                 "jersey": int(rp["jersey"]) if rp.get("jersey") else 0,
                 "experience": rp.get("experience", 0) or 0,
                 "espn_id": rp["espn_id"], "_class": rp.get("class", ""),
+                "_status": rp.get("status", "active"),
             })
         # filter out graduated/inactive players:
         # keep if freshman, or has 2026 stats, or underclassman (So/Jr),
@@ -195,16 +197,27 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
             seasons = sorted([s for s in st.keys() if s.isdigit()], key=lambda x: int(x), reverse=True)
             has_current = str(season) in st
             has_prior = str(prior) in st
-            if is_fr:
+            has_recent = any(int(s) >= season - 2 for s in seasons if s.isdigit())
+            espn_status = (p.get("_status") or "active").lower()
+            is_inactive = espn_status in ("inactive", "out", "suspended")
+            if is_inactive:
+                keep = False  # ESPN says inactive
+            elif is_fr:
                 keep = True
             elif has_current:
                 keep = True
             elif is_underclass:
                 keep = True
             elif is_sr_grad and has_prior:
-                keep = True  # returning senior/grad
+                keep = True  # returning senior/grad with prior year stats
+            elif is_sr_grad and has_recent:
+                keep = True  # senior with stats from 1-2 years ago (transfer)
+            elif is_sr_grad and len(seasons) == 0:
+                keep = True  # senior with no stats at all (new player, keep)
+            elif is_sr_grad and not has_recent:
+                keep = False  # graduated (last played 2+ years ago)
             else:
-                keep = (not is_sr_grad)  # keep non-seniors by default
+                keep = True  # default: keep unknowns
             if keep:
                 filtered.append(p)
             else:

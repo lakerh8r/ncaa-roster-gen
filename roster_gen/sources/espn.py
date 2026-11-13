@@ -69,6 +69,7 @@ def espn_team_roster(espn_team_id):
                     "weight": it.get("weight"),
                     "experience": exp.get("years", 0),
                     "class": exp.get("abbreviation", ""),
+                    "status": (it.get("status") or {}).get("type", "active"),
                 })
         return out
     return _cached(f"roster_{espn_team_id}", fetch, ttl=86400 * 3)
