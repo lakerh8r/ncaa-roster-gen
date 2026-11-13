@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 CACHE_DIR = os.environ.get("ROSTER_CACHE", "/tmp/opencode/roster_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+UA = "Mozilla/5.0"
 
 
 def _cache_path(key):
@@ -27,10 +27,12 @@ def _cached(key, fetcher, ttl=86400 * 7):
         except Exception:
             pass
     data = fetcher()
-    try:
-        json.dump({"_ts": time.time(), "data": data}, open(path, "w"))
-    except Exception:
-        pass
+    # Don't cache empty results (likely rate-limited or failed)
+    if data:
+        try:
+            json.dump({"_ts": time.time(), "data": data}, open(path, "w"))
+        except Exception:
+            pass
     return data
 
 
@@ -51,27 +53,35 @@ def espn_teams():
 def espn_team_roster(espn_team_id):
     """Return list of player dicts from ESPN roster API."""
     def fetch():
-        r = httpx.get(f"https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/{espn_team_id}/roster", timeout=30)
-        r.raise_for_status()
-        d = r.json()
-        out = []
-        for g in d.get("athletes", []):
-            for it in g.get("items", []):
-                exp = it.get("experience", {}) or {}
-                out.append({
-                    "espn_id": it.get("id"),
-                    "first": it.get("firstName", ""),
-                    "last": it.get("lastName", ""),
-                    "name": it.get("displayName", ""),
-                    "pos": (it.get("position") or {}).get("abbreviation", ""),
-                    "jersey": it.get("jersey"),
-                    "height": it.get("height"),
-                    "weight": it.get("weight"),
-                    "experience": exp.get("years", 0),
-                    "class": exp.get("abbreviation", ""),
-                    "status": (it.get("status") or {}).get("type", "active"),
-                })
-        return out
+        for attempt in range(3):
+            try:
+                r = httpx.get(f"https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/{espn_team_id}/roster", timeout=30, headers={"User-Agent": UA})
+                if r.status_code == 200:
+                    d = r.json()
+                    out = []
+                    for g in d.get("athletes", []):
+                        for it in g.get("items", []):
+                            exp = it.get("experience", {}) or {}
+                            out.append({
+                                "espn_id": it.get("id"),
+                                "first": it.get("firstName", ""),
+                                "last": it.get("lastName", ""),
+                                "name": it.get("displayName", ""),
+                                "slug": it.get("slug", ""),
+                                "pos": (it.get("position") or {}).get("abbreviation", ""),
+                                "jersey": it.get("jersey"),
+                                "height": it.get("height"),
+                                "weight": it.get("weight"),
+                                "experience": exp.get("years", 0),
+                                "class": exp.get("abbreviation", ""),
+                                "status": (it.get("status") or {}).get("type", "active"),
+                            })
+                    if out:
+                        return out
+                time.sleep(1 + attempt)
+            except Exception:
+                time.sleep(1 + attempt)
+        return []
     return _cached(f"roster_{espn_team_id}", fetch, ttl=86400 * 3)
 
 
@@ -84,71 +94,103 @@ def _parse_player_stats_html(html):
     # collect season rows from the first table of each pair
     i = 0
     n = len(tables)
-    # Strategy: find all tables; identify "season" header tables
-    # Pair consecutive tables: season table then stats table
-    idx = 0
-    # gather (season_table, stats_table) pairs
+    # Strategy: pair adjacent tables where first has 'season' in headers
+    # and second does not. Skip standings tables (no stat-like columns).
     pairs = []
-    # ESPN layout: season table, stats table, season table, stats table, ...
-    # Detect by header containing 'season'
-    cur_season = None
-    cur_stats = None
-    for t in tables:
-        headers = [th.get_text(strip=True).lower() for th in t.find_all("th")]
-        if "season" in headers:
-            # this is a season table; finalize previous pair
-            if cur_season is not None and cur_stats is not None:
-                pairs.append((cur_season, cur_stats))
-            cur_season = t
-            cur_stats = None
-        else:
-            if cur_season is not None:
-                cur_stats = t
-    if cur_season is not None and cur_stats is not None:
-        pairs.append((cur_season, cur_stats))
+    i = 0
+    while i < len(tables) - 1:
+        h1 = [th.get_text(strip=True).lower() for th in tables[i].find_all("th")]
+        h2 = [th.get_text(strip=True).lower() for th in tables[i + 1].find_all("th")]
+        if "season" in h1 and "season" not in h2:
+            # make sure h2 has actual stat columns (not just team/conf/ovr)
+            skip_words = {"team", "conf", "ovr", "rk", ""}
+            stat_cols = [h for h in h2 if h not in skip_words]
+            if len(stat_cols) >= 2:
+                pairs.append((tables[i], tables[i + 1]))
+                i += 2
+                continue
+        i += 1
 
-    for st, ss in pairs:
+    # Header mapping per pair index (ESPN uses ambiguous abbreviations).
+    # Pairs are in order: passing, rushing, receiving, defense, scoring.
+    PAIR_HEADER_MAP = [
+        # Pair 0: passing
+        {"CMP": "completions", "ATT": "passingAttempts", "CMP%": "completionPct",
+         "YDS": "passingYards", "AVG": "yardsPerAttempt", "TD": "passingTouchdowns",
+         "INT": "interceptions", "LNG": "longPass", "SACK": "sacks", "RTG": "rating"},
+        # Pair 1: rushing
+        {"CAR": "rushingAttempts", "YDS": "rushingYards", "AVG": "yardsPerRushAttempt",
+         "TD": "rushingTouchdowns", "LNG": "longRushing"},
+        # Pair 2: receiving
+        {"REC": "receptions", "YDS": "receivingYards", "AVG": "yardsPerReception",
+         "TD": "receivingTouchdowns", "LNG": "longReception"},
+        # Pair 3: defense
+        {"TOT": "tackles", "SOLO": "soloTackles", "AST": "assistedTackles",
+         "PD": "passesDefended", "SACK": "sacks", "FF": "forcedFumbles",
+         "INT": "interceptions", "YDS": "interceptionYards", "TD": "defTD"},
+        # Pair 4: scoring summary
+        {"PASS": "passingTD", "RUSH": "rushingTD", "REC": "receivingTD",
+         "RET": "returnTD", "TD": "totalTD", "2PT": "twoPt", "PAT": "pat",
+         "FG": "fg", "PTS": "points"},
+    ]
+    for pair_idx, (st, ss) in enumerate(pairs):
+        hmap = PAIR_HEADER_MAP[pair_idx] if pair_idx < len(PAIR_HEADER_MAP) else {}
         # season rows
         seasons = []
         for tr in st.find_all("tr")[1:]:
             cells = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
-            if cells and cells[0] and cells[0].lower() not in ("career",):
+            if cells and len(cells) >= 1 and cells[0] and cells[0].lower() not in ("career",):
                 seasons.append(cells[0])
-            elif cells and cells[0].lower() == "career":
+            elif cells and len(cells) >= 1 and cells[0].lower() == "career":
                 seasons.append("Career")
         # stats rows
         stat_headers = [th.get_text(strip=True) for th in ss.find_all("th")]
         stat_rows = []
         for tr in ss.find_all("tr")[1:]:
             cells = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
-            if cells:
+            if cells and any(c.strip() for c in cells):
                 stat_rows.append(cells)
         # align
-        # sometimes there's a leading empty header row; handle by length
         for si, season in enumerate(seasons):
             if si >= len(stat_rows):
                 break
             row = stat_rows[si]
-            # map headers to values
             vals = {}
             for hi, h in enumerate(stat_headers):
-                if hi < len(row):
+                if hi < len(row) and h.strip():
                     v = row[hi].replace(",", "")
                     try:
-                        vals[h] = float(v)
+                        num = float(v)
                     except ValueError:
-                        vals[h] = v
-            result[season] = vals
+                        num = None
+                    # map to standardized key
+                    key = hmap.get(h, h)
+                    if num is not None:
+                        vals[key] = num
+            if vals:
+                result.setdefault(season, {}).update(vals)
     return result
 
 
-def espn_player_stats(espn_id):
+def espn_player_stats(espn_id, slug=None):
     """Return {season: {statname: value}} for a player (career + per season)."""
-    def fetch():
+    if slug:
+        url = f"https://www.espn.com/college-football/player/stats/_/id/{espn_id}/{slug}"
+    else:
         url = f"https://www.espn.com/college-football/player/stats/_/id/{espn_id}"
-        r = httpx.get(url, timeout=30, follow_redirects=True, headers={"User-Agent": UA})
-        r.raise_for_status()
-        return _parse_player_stats_html(r.text)
+    def fetch():
+        for attempt in range(3):
+            try:
+                r = httpx.get(url, timeout=30, follow_redirects=True, headers={"User-Agent": UA})
+                if r.status_code == 200 and len(r.text) > 1000:
+                    return _parse_player_stats_html(r.text)
+                if r.status_code == 202:
+                    time.sleep(1 + attempt)
+                    continue
+                r.raise_for_status()
+            except Exception:
+                time.sleep(1 + attempt)
+        return {}
     return _cached(f"stats_{espn_id}", fetch, ttl=86400 * 7)
 
 

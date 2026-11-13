@@ -130,6 +130,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                 "experience": rp.get("experience", 0) or 0,
                 "espn_id": rp["espn_id"], "_class": rp.get("class", ""),
                 "_status": rp.get("status", "active"),
+                "slug": rp.get("slug", ""),
             })
 
         # distribute broad-label players to fill base position counts
@@ -164,6 +165,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                 "experience": rp.get("experience", 0) or 0,
                 "espn_id": rp["espn_id"], "_class": rp.get("class", ""),
                 "_status": rp.get("status", "active"),
+                "slug": rp.get("slug", ""),
             })
         # filter out graduated/inactive players:
         # keep if freshman, or has 2026 stats, or underclassman (So/Jr),
@@ -177,7 +179,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         if sr_grads:
             from concurrent.futures import ThreadPoolExecutor, as_completed
             with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = {executor.submit(espn_player_stats, p["espn_id"]): p for p in sr_grads}
+                futures = {executor.submit(espn_player_stats, p["espn_id"], p.get("slug", "")): p for p in sr_grads}
                 for future in as_completed(futures):
                     p = futures[future]
                     try:
@@ -232,7 +234,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
             st = p.get("_stats_raw", {})
             if not st:
                 try:
-                    st = espn_player_stats(p["espn_id"])
+                    st = espn_player_stats(p["espn_id"], p.get("slug", ""))
                 except Exception as e:
                     st = {}
             # st: {season: {stats}}; current and prior
@@ -313,7 +315,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         all_players.extend(chosen)
 
     # Check if any player has current-season stats
-    has_current_stats = any(str(season) in p.get("stats", {}) for p in all_players)
+    has_current_stats = any(p.get("stats") for p in all_players)
     if not has_current_stats:
         log(f"  WARNING: No {season} stats found. Using {prior} stats only (100% prior season).")
         log(f"  This is normal for pre-season runs.")
