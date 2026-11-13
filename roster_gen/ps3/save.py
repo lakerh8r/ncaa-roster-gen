@@ -38,19 +38,18 @@ def encrypt_save(work_dir, out_dir, src_save_dir, sfo_source_dir=None, account_i
         src = os.path.join(src_save_dir, name)
         if os.path.exists(src):
             shutil.copy2(src, os.path.join(out_dir, name))
-    # SFO from sfo_source (user's own save if available)
+    # SFO from sfo_source (preserves the user's own account ID)
     sfo_src_path = os.path.join(sfo_src, "PARAM.SFO")
     if os.path.exists(sfo_src_path):
         shutil.copy2(sfo_src_path, os.path.join(out_dir, "PARAM.SFO"))
-    # fix PARAM.SFO so the save's directory name matches the output folder
+    # fix PARAM.SFO directory name only if renaming
     sfo_path = os.path.join(out_dir, "PARAM.SFO")
-    if os.path.exists(sfo_path):
+    if os.path.exists(sfo_path) and os.path.basename(out_dir) != os.path.basename(src_save_dir):
         folder_name = os.path.basename(out_dir)
         sub = folder_name.split("ROSTER-", 1)[-1] if "ROSTER-" in folder_name else folder_name
-        from roster_gen.ps3.sfo import update_sfo_for_save, write_sfo
+        from roster_gen.ps3.sfo import update_sfo_for_save
         update_sfo_for_save(sfo_path, folder_name, sub_title="ROSTER-" + sub,
                             account_id=account_id)
-        write_sfo(sfo_path, {"SAVEDATA_LIST_PARAM": sub[:8]})
     # re-encrypt USR-DATA
     pfd = PFD(src_save_dir)
     with open(os.path.join(work_dir, "USR-DATA"), "rb") as f:

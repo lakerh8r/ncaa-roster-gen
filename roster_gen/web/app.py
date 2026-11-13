@@ -1,17 +1,17 @@
-"""Local web UI: enter a season start year + output folder, generate a roster save, watch progress."""
+"""Local web UI: enter a season start year + output folder + base save, generate a roster save, watch progress."""
 import threading
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
 app = FastAPI(title="ncaa-roster-gen")
 
-BASE_SAVE = "/home/lakerh8r/Downloads/NCAA14RosterPack/13-14 Release Year NCAA14/PS3 end of season 2013-14 Roster posted by majesty95/PS3 end of season 2013-14 Roster posted by majesty95/PS3/SAVEDATA/BLUS31159-ROSTER-JHASLEY10"
+DEFAULT_BASE = "/home/lakerh8r/Downloads/NCAA14RosterPack/13-14 Release Year NCAA14/PS3 end of season 2013-14 Roster posted by majesty95/PS3 end of season 2013-14 Roster posted by majesty95/PS3/SAVEDATA/BLUS31159-ROSTER-JHASLEY10"
 DEFAULT_OUT = "/home/lakerh8r/Downloads/NCAA14RosterPack"
 
 STATE = {"running": False, "lines": [], "done": False, "output": "", "error": ""}
 
 
-def _run(year, out_dir, keepname=False):
+def _run(year, base_dir, out_dir, keepname):
     global STATE
     STATE = {"running": True, "lines": [], "done": False, "output": "", "error": ""}
 
@@ -22,7 +22,7 @@ def _run(year, out_dir, keepname=False):
 
     try:
         from roster_gen.pipeline import run
-        out = run(year, BASE_SAVE, out_dir, log=log, rename=not keepname)
+        out = run(year, base_dir, out_dir, log=log, rename=not keepname)
         STATE["output"] = out
     except Exception as e:
         import traceback
@@ -58,8 +58,9 @@ INDEX = """<!doctype html>
   function start() {
     const y = document.getElementById('year').value;
     const o = document.getElementById('out').value;
+    const b = document.getElementById('base').value;
     const k = document.getElementById('keepname').checked ? 1 : 0;
-    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&keepname='+k, {method:'POST'});
+    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+k, {method:'POST'});
     document.getElementById('status').textContent = 'Running...';
     setTimeout(poll, 500);
   }
@@ -69,11 +70,12 @@ INDEX = """<!doctype html>
   <h1>NCAA Roster Generator</h1>
   <label>Season start year (e.g. 2026): <input id="year" type="number" value="2026"></label>
   <label>Output folder: <input id="out" type="text" value="__DEFAULT_OUT__" style="width:600px"></label>
-  <label><input id="keepname" type="checkbox"> Keep original save name (safer for PS3, recommended if having issues)</label>
+  <label>Base save folder (your own PS3 save, or leave default): <input id="base" type="text" value="__DEFAULT_BASE__" style="width:600px"></label>
+  <label><input id="keepname" type="checkbox" checked> Keep original save name (safer for PS3)</label>
   <p><button onclick="start()">Generate</button></p>
   <p id="status"></p>
   <div id="log"></div>
-</body></html>""".replace("__DEFAULT_OUT__", DEFAULT_OUT)
+</body></html>""".replace("__DEFAULT_OUT__", DEFAULT_OUT).replace("__DEFAULT_BASE__", DEFAULT_BASE)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -82,10 +84,10 @@ def index():
 
 
 @app.post("/generate")
-def generate(year: int, out: str, keepname: int = 0):
+def generate(year: int, out: str, base: str, keepname: int = 0):
     if STATE["running"]:
         return JSONResponse({"ok": False, "msg": "already running"})
-    threading.Thread(target=_run, args=(year, out, bool(keepname)), daemon=True).start()
+    threading.Thread(target=_run, args=(year, base, out, bool(keepname)), daemon=True).start()
     return JSONResponse({"ok": True})
 
 

@@ -145,9 +145,9 @@ def run(year, base_dir, out_dir=None, log=print, rename=True):
     log(f"[6/6] Encrypting save -> {out_dir}")
     # Set ACCOUNT_ID to the user's own PS3 account (from their save) so the
     # PS3 recognizes the save as theirs. Falls back to neutral zeros if unknown.
-    user_account = "279a69666b28e2e7"
     if rename:
-        encrypt_save(work, save_dir, base_dir, sfo_source_dir=None, account_id=user_account)
+        # Use base's own SFO (preserves account ID), update directory name only
+        encrypt_save(work, save_dir, base_dir, sfo_source_dir=base_dir, account_id=None)
     else:
         # Keep original PARAM.SFO byte-identical (no rename, no account change)
         import shutil
