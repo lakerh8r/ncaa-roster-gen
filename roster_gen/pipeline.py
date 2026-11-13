@@ -139,7 +139,10 @@ def run(year, base_dir, out_dir=None, log=print):
         f.write(new_db)
 
     log(f"[6/6] Encrypting save -> {out_dir}")
-    encrypt_save(work, save_dir, base_dir)
+    # Set ACCOUNT_ID to the user's own PS3 account (from their save) so the
+    # PS3 recognizes the save as theirs. Falls back to neutral zeros if unknown.
+    user_account = "279a69666b28e2e7"
+    encrypt_save(work, save_dir, base_dir, sfo_source_dir=None, account_id=user_account)
 
     # report + csv in the output root
     report_path = os.path.join(out_dir, "report.txt")
