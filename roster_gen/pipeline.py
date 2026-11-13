@@ -70,24 +70,85 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False)
             log(f"        roster fetch failed: {e}")
             team_to_players[tg] = []
             continue
-        # map to NCAA positions
-        cand = []
+        # base position counts for this team (target distribution)
+        base_ps = players(db, tg) if False else None
+        # get base position counts from the base db
+        base_pos_counts = {}
+        for bp in players(db, tg):
+            base_pos_counts[bp["pos"]] = base_pos_counts.get(bp["pos"], 0) + 1
+
+        # separate specific vs broad positions
+        BROAD = {"OL": [5,6,7,8,9], "DL": [10,11,12], "LB": [13,14,15], "DB": [16,17,18], "EDGE": [10,11]}
+        SPECIFIC_MAP = {
+            "QB":0,"RB":1,"HB":1,"FB":2,"WR":3,"TE":4,
+            "OT":5,"LT":5,"OG":6,"LG":6,"G":6,"C":7,"RG":8,"RT":9,
+            "DE":10,"LE":10,"RE":11,"DT":12,"NT":12,
+            "LB":None,"OLB":13,"ILB":14,"MLB":14,"LLB":13,"RLB":15,
+            "CB":16,"S":17,"FS":17,"SS":18,
+            "K":19,"PK":19,"P":20,"LS":4,
+        }
+
+        # first pass: map specific positions
+        specific_players = []
+        broad_players = []
         for rp in roster:
-            code = map_position(rp["pos"], rp.get("weight"))
-            if code is None:
-                continue
+            espn_pos = rp["pos"]
+            if espn_pos in BROAD:
+                broad_players.append(rp)
+            else:
+                code = SPECIFIC_MAP.get(espn_pos)
+                if code is None and espn_pos == "EDGE":
+                    code = 10 if (rp.get("weight") or 0) >= 250 else 11
+                if code is None:
+                    code = map_position(espn_pos, rp.get("weight"))
+                if code is None:
+                    continue
+                specific_players.append((rp, code))
+
+        # build candidate list with specific positions assigned
+        cand = []
+        for rp, code in specific_players:
             cand.append({
-                "first": rp["first"],
-                "last": rp["last"],
-                "pos": code,
+                "first": rp["first"], "last": rp["last"], "pos": code,
                 "year": _class_to_year(rp.get("class"), rp.get("experience", 0)),
                 "redshirt": 1 if (rp.get("class") or "").startswith("R") else 0,
-                "height": int(rp["height"] or 72),
-                "weight": int(rp["weight"] or 200),
+                "height": int(rp["height"] or 72), "weight": int(rp["weight"] or 200),
                 "jersey": int(rp["jersey"]) if rp.get("jersey") else 0,
                 "experience": rp.get("experience", 0) or 0,
-                "espn_id": rp["espn_id"],
-                "_class": rp.get("class", ""),
+                "espn_id": rp["espn_id"], "_class": rp.get("class", ""),
+            })
+
+        # distribute broad-label players to fill base position counts
+        # current counts
+        cur_counts = {}
+        for c in cand:
+            cur_counts[c["pos"]] = cur_counts.get(c["pos"], 0) + 1
+
+        for rp in broad_players:
+            espn_pos = rp["pos"]
+            targets = BROAD.get(espn_pos, [])
+            if not targets:
+                continue
+            # pick the target position with the largest shortfall vs base
+            best_pos = None
+            best_shortfall = -999
+            for tp in targets:
+                target = base_pos_counts.get(tp, 1)
+                shortfall = target - cur_counts.get(tp, 0)
+                if shortfall > best_shortfall:
+                    best_shortfall = shortfall
+                    best_pos = tp
+            if best_pos is None:
+                best_pos = targets[0]
+            cur_counts[best_pos] = cur_counts.get(best_pos, 0) + 1
+            cand.append({
+                "first": rp["first"], "last": rp["last"], "pos": best_pos,
+                "year": _class_to_year(rp.get("class"), rp.get("experience", 0)),
+                "redshirt": 1 if (rp.get("class") or "").startswith("R") else 0,
+                "height": int(rp["height"] or 72), "weight": int(rp["weight"] or 200),
+                "jersey": int(rp["jersey"]) if rp.get("jersey") else 0,
+                "experience": rp.get("experience", 0) or 0,
+                "espn_id": rp["espn_id"], "_class": rp.get("class", ""),
             })
         # filter out graduated/inactive players:
         # keep if freshman, or has 2026 stats, or underclassman (So/Jr),
