@@ -85,7 +85,7 @@ def _set_player_row(t, rec, p, attrs, base_db=None):
     t.set_int(rec, "POID", pgid)
 
 
-def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=None):
+def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=None, log=print):
     play = db.table("PLAY")
     rows_by_team = {}
     for i in range(play.current_records):
@@ -93,7 +93,8 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
         tg = play.get_int(r, "TGID")
         rows_by_team.setdefault(tg, []).append(i)
 
-    for tgid, players in team_to_players.items():
+    total_teams = len(team_to_players)
+    for ti, (tgid, players) in enumerate(team_to_players.items()):
         slots = rows_by_team.get(tgid, [])
         for slot_idx, row_i in enumerate(slots):
             rec = play.record(row_i)
@@ -106,6 +107,8 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
                     "first": "Walk", "last": "On", "pos": 1, "year": 1,
                     "height": 72, "weight": 190, "jersey": 0, "team": tgid,
                 }, {"POVR": 45, "PSPD": 60, "PSTR": 55, "PAWR": 45}, base_db=base_db)
+        if (ti + 1) % 10 == 0 or ti == total_teams - 1:
+            log(f"    Writing players... ({ti + 1}/{total_teams} teams)")
 
     dcht = db.table("DCHT")
     matched_tgids = set(team_to_players.keys())
