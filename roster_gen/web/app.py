@@ -23,7 +23,7 @@ def _run(year, base_dir, out_dir, keepname, realignment, rankings):
 
     try:
         from roster_gen.pipeline import run
-        out = run(year, base_dir, out_dir, log=log, rename=not keepname, realignment=realignment, rankings=rankings)
+        out = run(year, base_dir, out_dir, log=log, rename=not keepname, realignment=realignment, rankings=rankings, workers=10)
         STATE["output"] = out
     except Exception as e:
         import traceback

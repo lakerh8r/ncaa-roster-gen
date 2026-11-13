@@ -15,7 +15,7 @@ def _season_str(y):
     return f"{y}-{str(y + 1)[-2:]}"
 
 
-def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False, rankings=True):
+def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False, rankings=True, workers=10):
     season = year
     prior = year - 1
     if out_dir is None:
@@ -55,19 +55,32 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
 
     team_to_players = {}
     all_players = []
+
+    # Fetch all rosters in parallel
+    log(f"  Fetching {len(base_teams)} rosters in parallel ({workers} workers)...")
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    roster_cache = {}
+    teams_with_espn = [(t, tmap.get(t["name"])) for t in base_teams if tmap.get(t["name"])]
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_team = {executor.submit(espn_team_roster, eid): (t, eid) for t, eid in teams_with_espn}
+        for future in as_completed(future_to_team):
+            t, eid = future_to_team[future]
+            try:
+                roster_cache[eid] = future.result()
+            except Exception as e:
+                log(f"        roster fetch failed for {t['name']}: {e}")
+                roster_cache[eid] = []
+
     for ti, t in enumerate(base_teams):
         tg = t["tgid"]
         espn_id = tmap.get(t["name"])
         slots = base_counts[tg]
         log(f"      [{ti+1}/{len(base_teams)}] {t['name']} (slots={slots}) espn={espn_id}")
         if not espn_id:
-            # leave base players untouched
             team_to_players[tg] = []
             continue
-        try:
-            roster = espn_team_roster(espn_id)
-        except Exception as e:
-            log(f"        roster fetch failed: {e}")
+        roster = roster_cache.get(espn_id, [])
+        if not roster:
             team_to_players[tg] = []
             continue
         # base position counts for this team (target distribution)
@@ -154,19 +167,34 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         # keep if freshman, or has 2026 stats, or underclassman (So/Jr),
         # or senior/grad with 2025 stats (returning). Drop Sr/Gr with no recent stats.
         filtered = []
+        # Parallel stats fetch for seniors/grads only
+        sr_grads = [p for p in cand if ((p["_class"] or "").upper().startswith("SR") or
+                    (p["_class"] or "").upper().startswith("GR") or
+                    "5" in (p["_class"] or "") or "6" in (p["_class"] or ""))]
+        stats_results = {}
+        if sr_grads:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {executor.submit(espn_player_stats, p["espn_id"]): p for p in sr_grads}
+                for future in as_completed(futures):
+                    p = futures[future]
+                    try:
+                        stats_results[p["espn_id"]] = future.result()
+                    except Exception:
+                        stats_results[p["espn_id"]] = {}
         for p in cand:
             cls = (p["_class"] or "").upper()
             is_fr = cls.startswith("FR") or (p["experience"] or 0) == 0
-            # fetch stats to check activity
-            try:
-                st = espn_player_stats(p["espn_id"])
-            except Exception:
-                st = {}
+            is_underclass = cls.startswith("SO") or cls.startswith("JR") or cls.startswith("FR")
+            is_sr_grad = cls.startswith("SR") or cls.startswith("GR") or "5" in cls or "6" in cls
+            # Only fetch stats for seniors/grads (others are always kept)
+            st = {}
+            if is_sr_grad:
+                st = stats_results.get(p["espn_id"], {})
+            p["_stats_raw"] = st
             seasons = sorted([s for s in st.keys() if s.isdigit()], key=lambda x: int(x), reverse=True)
             has_current = str(season) in st
             has_prior = str(prior) in st
-            is_underclass = cls.startswith("SO") or cls.startswith("JR") or cls.startswith("FR")
-            is_sr_grad = cls.startswith("SR") or cls.startswith("GR") or "5" in cls or "6" in cls
             if is_fr:
                 keep = True
             elif has_current:
@@ -176,7 +204,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
             elif is_sr_grad and has_prior:
                 keep = True  # returning senior/grad
             else:
-                keep = False  # graduated or inactive
+                keep = (not is_sr_grad)  # keep non-seniors by default
             if keep:
                 filtered.append(p)
             else:
@@ -186,19 +214,20 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         cand.sort(key=lambda x: (-x["experience"], x["pos"]))
         # take top `slots`
         chosen = cand[:slots]
-        # fetch stats for each
+        # fetch stats for each (reuse cached from filter; only fetch if missing)
         for p in chosen:
-            try:
-                st = espn_player_stats(p["espn_id"])
-            except Exception as e:
-                st = {}
+            st = p.get("_stats_raw", {})
+            if not st:
+                try:
+                    st = espn_player_stats(p["espn_id"])
+                except Exception as e:
+                    st = {}
             # st: {season: {stats}}; current and prior
             cur = st.get(str(season), {}) or st.get(str(season) + " Season", {}) or {}
             pri = st.get(str(prior), {}) or {}
             # if ESPN seasons keyed differently, try last two non-career
             seasons = [s for s in st.keys() if s.lower() != "career"]
             if not cur and seasons:
-                # pick the most recent
                 seasons_sorted = sorted(seasons, key=lambda x: int(x) if x.isdigit() else 0, reverse=True)
                 cur = st.get(seasons_sorted[0], {}) if seasons_sorted else {}
                 pri = st.get(seasons_sorted[1], {}) if len(seasons_sorted) > 1 else {}

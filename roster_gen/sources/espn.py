@@ -71,7 +71,7 @@ def espn_team_roster(espn_team_id):
                     "class": exp.get("abbreviation", ""),
                 })
         return out
-    return _cached(f"roster_{espn_team_id}", fetch, ttl=86400 * 7)
+    return _cached(f"roster_{espn_team_id}", fetch, ttl=86400 * 3)
 
 
 def _parse_player_stats_html(html):
