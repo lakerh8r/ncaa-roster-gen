@@ -204,6 +204,42 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                 pri = st.get(seasons_sorted[1], {}) if len(seasons_sorted) > 1 else {}
             p["stats"] = cur
             p["prior_stats"] = pri
+        # assign jersey numbers: players without numbers go lower on depth chart
+        JERSEY_RANGES = {
+            0: (1, 19), 1: (20, 49), 2: (30, 49), 3: (80, 89), 4: (40, 49),
+            5: (50, 79), 6: (50, 79), 7: (50, 79), 8: (50, 79), 9: (50, 79),
+            10: (90, 99), 11: (90, 99), 12: (90, 99),
+            13: (40, 59), 14: (40, 59), 15: (40, 59),
+            16: (20, 49), 17: (20, 49), 18: (20, 49),
+            19: (1, 19), 20: (1, 19),
+        }
+        used_numbers = set()
+        for p in chosen:
+            j = p.get("jersey", 0) or 0
+            p["_had_jersey"] = j > 0
+            if j > 0:
+                used_numbers.add(j)
+        for p in chosen:
+            j = p.get("jersey", 0) or 0
+            if j == 0:
+                lo, hi = JERSEY_RANGES.get(p["pos"], (1, 99))
+                assigned = None
+                for num in range(lo, hi + 1):
+                    if num not in used_numbers:
+                        assigned = num
+                        break
+                if assigned is None:
+                    for num in range(1, 100):
+                        if num not in used_numbers:
+                            assigned = num
+                            break
+                if assigned is not None:
+                    p["jersey"] = assigned
+                    used_numbers.add(assigned)
+        # sort: players with original jersey numbers first (by experience),
+        # then those who got assigned numbers (lower on depth chart)
+        chosen.sort(key=lambda p: (0 if p.get("_had_jersey", False) else 1,
+                                   -(p.get("experience", 0) or 0)))
         # assign pgids from base slots
         pgids = base_pgids[tg]
         for i, p in enumerate(chosen):
@@ -215,8 +251,17 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         while len(chosen) < slots:
             p = {"first": "Walk", "last": "On", "pos": 1, "year": 1, "redshirt": 0,
                  "height": 72, "weight": 190, "jersey": 0, "experience": 0,
-                 "stats": {}, "prior_stats": {}, "_pgid": pgids[len(chosen)] if len(chosen) < len(pgids) else 0}
+                 "stats": {}, "prior_stats": {}, "_pgid": pgids[len(chosen)] if len(chosen) < len(pgids) else 0,
+                 "_had_jersey": False}
             chosen.append(p)
+        # assign jersey numbers to walk-ons too
+        for p in chosen:
+            if (p.get("jersey", 0) or 0) == 0:
+                for num in range(20, 100):
+                    if num not in used_numbers:
+                        p["jersey"] = num
+                        used_numbers.add(num)
+                        break
         team_to_players[tg] = chosen
         all_players.extend(chosen)
 
