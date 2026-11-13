@@ -1,9 +1,54 @@
 """Write a rated roster into an EA TDBFile (in place)."""
-from roster_gen.db.roster import POSITIONS
+from roster_gen.db.conferences import get_conference_id, prestige_for
 from roster_gen.eadb import TDBFile
 
+# Body definition (0-15, body type) and size (0-31, proportions) fields
+BODY_DEF_FIELDS = ["BSAA", "BSBA", "BSCA", "BSFA", "BSGA", "BSPA",
+                   "BSSA", "BSTA", "BSWA", "PHCL", "PLEL", "PREL",
+                   "PLTH", "PRTH", "PLFB", "PRFB", "PLCB", "PRCB",
+                   "PLBB", "PRBB", "PLKL", "PSPL", "PLSL", "PLKN",
+                   "PRKN", "PLKR", "PRKR", "PLTW", "PLHW", "PLSO",
+                   "LSLR", "LSRR"]
+# Actually, let's just grab all BS* and PL*/PR* fields dynamically
 
-def _set_player_row(t, rec, p, attrs):
+BODY_SIZE_FIELDS = ["BSAT", "BSBT", "BSCT", "BSFT", "BSGT", "BSPT",
+                    "BSST", "BSTT", "BSWT", "PLHA", "PRHA"]
+
+FACE_FIELDS = ["PGHE", "PUHE", "PHCL"]
+
+
+def _find_closest_body(base_db, pos, weight):
+    """Find the base player (same position) with closest weight; return their body/face fields."""
+    if base_db is None:
+        return None
+    base_play = base_db.table("PLAY")
+    best = None
+    best_diff = 9999
+    for i in range(base_play.current_records):
+        r = base_play.record(i)
+        if base_play.get_int(r, "PPOS") != pos:
+            continue
+        bw = base_play.get_int(r, "PWGT") + 160
+        diff = abs(bw - weight)
+        if diff < best_diff:
+            best_diff = diff
+            best = r
+    if best is None:
+        return None
+    result = {}
+    for f in base_play.fields:
+        if f.is_string:
+            continue
+        # copy body def, body size, face, hair color fields
+        if f.name.startswith("BS") or f.name.startswith("PL") or f.name.startswith("PR") or f.name in ("PGHE", "PUHE", "PHCL", "PHIT"):
+            try:
+                result[f.name] = base_play.get_int(best, f.name)
+            except Exception:
+                pass
+    return result
+
+
+def _set_player_row(t, rec, p, attrs, base_db=None):
     t.set_str(rec, "PFNA", (p.get("first") or "")[:11])
     t.set_str(rec, "PLNA", (p.get("last") or "")[:13])
     t.set_int(rec, "PWGT", (p.get("weight", 200) - 160))
@@ -18,6 +63,24 @@ def _set_player_row(t, rec, p, attrs):
             t.set_int(rec, k, int(v))
         except Exception:
             pass
+    # Fix body type and skin tone: copy from closest base player by position+weight
+    body = _find_closest_body(base_db, p["pos"], p.get("weight", 200))
+    if body:
+        for f, v in body.items():
+            try:
+                t.set_int(rec, f, v)
+            except Exception:
+                pass
+    else:
+        # fallback: reset body/face fields to 0 (game default)
+        for f in t.fields:
+            if (not f.is_string and
+                    (f.name.startswith("BS") or f.name.startswith("PL") or
+                     f.name.startswith("PR") or f.name in ("PGHE", "PUHE", "PHCL"))):
+                try:
+                    t.set_int(rec, f.name, 0)
+                except Exception:
+                    pass
     pgid = t.get_int(rec, "PGID")
     t.set_int(rec, "POID", pgid)
 
@@ -37,12 +100,12 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
             if slot_idx < len(players):
                 p = players[slot_idx]
                 p["team"] = tgid
-                _set_player_row(play, rec, p, p.get("_attrs", {}))
+                _set_player_row(play, rec, p, p.get("_attrs", {}), base_db=base_db)
             else:
                 _set_player_row(play, rec, {
                     "first": "Walk", "last": "On", "pos": 1, "year": 1,
                     "height": 72, "weight": 190, "jersey": 0, "team": tgid,
-                }, {"POVR": 45, "PSPD": 60, "PSTR": 55, "PAWR": 45})
+                }, {"POVR": 45, "PSPD": 60, "PSTR": 55, "PAWR": 45}, base_db=base_db)
 
     dcht = db.table("DCHT")
     matched_tgids = set(team_to_players.keys())
@@ -123,6 +186,16 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
         team_tbl.set_int(rec, "TDRR", int(round(sum(def_ovrs) / len(def_ovrs))) if def_ovrs else 70)
         team_tbl.set_int(rec, "TRST", 70)
 
+    # Phase A realignment: update conference, division, prestige
+    if realignment:
+        from roster_gen.db.conferences import get_conference_id
+        for i in range(team_tbl.row_count()):
+            rec = team_tbl.record(i)
+            name = team_tbl.get_str(rec, "TDNA")
+            cg = get_conference_id(name)
+            if cg is not None:
+                team_tbl.set_int(rec, "CGID", cg)
+
     # Top 25 rankings (AP + Coaches)
     if rankings:
         for i in range(team_tbl.row_count()):
@@ -132,15 +205,3 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
                 ap_rank, coaches_rank = rankings[name]
                 team_tbl.set_int(rec, "TMRK", ap_rank)
                 team_tbl.set_int(rec, "TCRK", coaches_rank)
-            # else: leave original TMRK/TCRK unchanged
-
-    # Phase A realignment (minimal): update conference only
-    if realignment:
-        from roster_gen.db.conferences import get_conference_id
-        for i in range(team_tbl.row_count()):
-            rec = team_tbl.record(i)
-            name = team_tbl.get_str(rec, "TDNA")
-            cg = get_conference_id(name)
-            if cg is not None:
-                team_tbl.set_int(rec, "CGID", cg)
-            # leave DGID, TPRX, and all other fields unchanged
