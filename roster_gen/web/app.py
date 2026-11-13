@@ -95,7 +95,7 @@ INDEX = r"""<!doctype html>
     const r = await fetch('/status');
     const s = await r.json();
     const log = document.getElementById('log');
-    log.textContent = s.lines.join('\\n');
+    log.textContent = s.lines.join('\n');
     log.scrollTop = log.scrollHeight;
     if (s.done) {
       document.getElementById('status').textContent = s.error ? ('ERROR: ' + s.error) : ('Done! Output: ' + s.output + '  --  Copy the PS3 folder to your USB root (or upload BLUS31159-ROSTER-* to /dev_hdd0/home/00000001/savedata/ via FTP).');
