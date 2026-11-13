@@ -127,7 +127,8 @@ def run(year, base_dir, out_dir=None, log=print):
     rate_players(all_players)
 
     log(f"[5/6] Writing DB...")
-    write_roster(db, team_to_players)
+    base_db = TDBFile(open(db_path, "rb").read())
+    write_roster(db, team_to_players, base_db=base_db)
     # save db
     new_db = db.build()
     # Pad to the original container size (1,433,600 bytes) with zero plaintext.
