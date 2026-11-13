@@ -3,7 +3,7 @@ import threading
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
-app = FastAPI(title="ncaa-roster-gen")
+app = FastAPI(title="NCAA Football 14 Roster Generator")
 
 DEFAULT_BASE = "/home/lakerh8r/Downloads/NCAA14RosterPack/13-14 Release Year NCAA14/PS3 end of season 2013-14 Roster posted by majesty95/PS3 end of season 2013-14 Roster posted by majesty95/PS3/SAVEDATA/BLUS31159-ROSTER-JHASLEY10"
 DEFAULT_OUT = "/home/lakerh8r/Downloads/NCAA14RosterPack"
@@ -34,7 +34,7 @@ def _run(year, base_dir, out_dir, keepname):
 
 
 INDEX = """<!doctype html>
-<html><head><meta charset="utf-8"><title>ncaa-roster-gen</title>
+<html><head><meta charset="utf-8"><title>NCAA Football 14 Roster Generator</title>
 <style>
   body { font-family: monospace; max-width: 900px; margin: 2em auto; }
   #log { background:#111; color:#0f0; padding:1em; height:400px; overflow:auto; white-space:pre-wrap; border-radius:6px; }
@@ -67,10 +67,10 @@ INDEX = """<!doctype html>
 </script>
 </head>
 <body>
-  <h1>NCAA Roster Generator</h1>
-  <label>Season start year (e.g. 2026): <input id="year" type="number" value="2026"></label>
-  <label>Output folder: <input id="out" type="text" value="__DEFAULT_OUT__" style="width:600px"></label>
+  <h1>NCAA Football 14 Roster Generator</h1>
   <label>Base save folder (your own PS3 save, or leave default): <input id="base" type="text" value="__DEFAULT_BASE__" style="width:600px"></label>
+  <label>Output folder: <input id="out" type="text" value="__DEFAULT_OUT__" style="width:600px"></label>
+  <label>Season start year (e.g. 2026): <input id="year" type="number" value="2026"></label>
   <label><input id="keepname" type="checkbox" checked> Keep original save name (safer for PS3)</label>
   <p><button onclick="start()">Generate</button></p>
   <p id="status"></p>
