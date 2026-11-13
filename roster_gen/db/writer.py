@@ -143,8 +143,8 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
             cg = get_conference_id(name)
             if cg is not None:
                 team_tbl.set_int(rec, "CGID", cg)
-            # no divisions in 2026
-            team_tbl.set_int(rec, "DGID", 30)
+            # keep original division (don't change DGID — game's scheduler
+            # expects the original division structure)
             # prestige
             ps = team_to_players.get(tgid, [])
             ovrs = [p.get("_attrs", {}).get("POVR", 70) for p in ps]
