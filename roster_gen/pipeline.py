@@ -418,7 +418,6 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     elapsed = time.time() - _t0
     log(f"Done. Output root: {out_dir}")
     log(f"Save folder: {save_dir}")
-    log(f"Total time: {_dur(elapsed)}")
     log("")
     log("=== WHERE TO COPY ON YOUR PS3 ===")
     log("USB drive: copy the 'PS3' folder to the ROOT of your USB drive.")
@@ -426,6 +425,8 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     log("FTP: upload 'BLUS31159-ROSTER-...' into /dev_hdd0/home/00000001/savedata/")
     log("  (skip the PS3/SAVEDATA wrapper for FTP)")
     log("Then launch NCAA Football 14.")
+    log("")
+    log(f"Total runtime: {_dur(elapsed)}")
 
     # report + csv
     report_path = os.path.join(out_dir, "report.txt")
