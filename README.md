@@ -10,15 +10,16 @@ game, any save files, or team art.
 
 ## What you need
 
-- **Linux** (or macOS; Windows users can use the command line — see below)
+- **Windows, Linux, or macOS** (Windows steps below)
 - **Python 3.11+**
 - **A PS3 NCAA Football 14 roster save folder** to use as the base. It must
   contain `PARAM.PFD` and `USR-DATA`, e.g. `BLUS31159-ROSTER-SOMETHING`.
   Community roster packs are widely shared; use one you already have.
-- A PS3 that can copy save data from USB (CFW/HEN, or a save you can transfer
-  via FTP).
+- A PS3 that can copy save data from a USB drive. No jailbreak is needed to
+  copy save data — the generated save keeps your base save's account ID, so
+  build from a save that already loads on your console.
 
-## Quick start (Linux)
+## Quick start (Linux / macOS)
 
 ```bash
 git clone https://github.com/lakerh8r/ncaa-roster-gen.git
@@ -39,6 +40,34 @@ Then:
 
 A full run takes about **2–3 minutes** the first time (~40 seconds after that,
 because ESPN responses are cached).
+
+## Quick start (Windows)
+
+Install Python 3.11+ from [python.org](https://www.python.org/downloads/) and
+tick **"Add python.exe to PATH"** during setup.
+
+Then either:
+
+**Double-click `launch.bat`** in the repo folder. The first run creates the
+environment and installs dependencies (a minute or two); after that it starts
+the server and opens the browser.
+
+**Or do it by hand** in PowerShell, from the repo folder:
+
+```powershell
+py -m venv .venv
+.venv\Scripts\python -m pip install -e .
+.venv\Scripts\roster-gen serve
+```
+
+Then open <http://127.0.0.1:8765>. The web UI is identical to Linux; only the
+launcher differs (`setup.sh` and `launch.sh` are bash-only).
+
+`py` is the Python launcher that ships with python.org installs. If Windows
+says it can't find `py`, use `python` or `python3` instead.
+
+If you already use **WSL**, install Ubuntu from the Microsoft Store and follow
+the Linux steps above instead.
 
 ## Copying the save to your PS3
 
@@ -106,6 +135,8 @@ Environment variables:
 
 - **PS3 error 8001051C (corrupted data):** make sure *Keep original save name*
   is checked. The save must keep the base folder name for the PS3 to accept it.
+- **PS3 says the save belongs to another user:** the output keeps the account ID
+  of the base save. Build from a base save that already loads on your PS3.
 - **"No <year> stats found" warning:** normal before a season starts, or if you
   picked a year ESPN has no data for yet. Ratings fall back to the prior season.
 - **Realignment freezes on "generating season schedule":** known issue; leave
