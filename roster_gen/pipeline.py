@@ -26,6 +26,16 @@ def _dur(seconds):
     return f"{int(minutes)}m {secs:.0f}s"
 
 
+def _num(v):
+    """Safe numeric conversion for ESPN stat values."""
+    if v is None:
+        return 0.0
+    try:
+        return float(str(v).replace(",", ""))
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def _season_str(y):
     return f"{y}-{str(y + 1)[-2:]}"
 
@@ -95,13 +105,13 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     log(f"      matched {matched}/{len(ncaa_names)}")
     _mark("Step 2: map teams")
 
-    # base slot counts + pgids
-    base_counts = {}
-    base_pgids = {}
-    for t in base_teams:
-        ps = players_list(db, t["tgid"])
-        base_counts[t["tgid"]] = len(ps)
-        base_pgids[t["tgid"]] = [p["pgid"] for p in ps]
+    # one pass over PLAY: players grouped by team (avoids rescanning per team)
+    players_by_team = {}
+    for p in players(db):
+        players_by_team.setdefault(p["team"], []).append(p)
+    base_counts = {t["tgid"]: len(players_by_team.get(t["tgid"], [])) for t in base_teams}
+    base_pgids = {t["tgid"]: [p["pgid"] for p in players_by_team.get(t["tgid"], [])]
+                  for t in base_teams}
 
     log("[3/6] Scraping rosters...")
     log(f"  Fetching {len(base_teams)} rosters in parallel ({workers} workers)...")
@@ -139,6 +149,12 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         19: (1, 19), 20: (1, 19),
     }
 
+    # Shared pool for player-stat downloads: one pool for the whole run keeps
+    # connections warm instead of creating a pool per team.
+    stats_pool = None
+    if not skip_stats:
+        stats_pool = ThreadPoolExecutor(max_workers=max(workers, 8))
+
     for ti, t in enumerate(base_teams):
         tg = t["tgid"]
         espn_id = tmap.get(t["name"])
@@ -153,7 +169,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
             continue
 
         base_pos_counts = {}
-        for bp in players_list(db, tg):
+        for bp in players_by_team.get(tg, []):
             base_pos_counts[bp["pos"]] = base_pos_counts.get(bp["pos"], 0) + 1
 
         specific_players = []
@@ -184,6 +200,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                 "espn_id": rp["espn_id"], "_class": rp.get("class", ""),
                 "_status": rp.get("status", "active"),
                 "slug": rp.get("slug", ""),
+                "_stats_loaded": False,
             })
 
         cur_counts = {}
@@ -216,33 +233,32 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                 "espn_id": rp["espn_id"], "_class": rp.get("class", ""),
                 "_status": rp.get("status", "active"),
                 "slug": rp.get("slug", ""),
+                "_stats_loaded": False,
             })
+
+        # Fetch stats for the whole team in parallel (shared pool, warm connections).
+        if not skip_stats and stats_pool is not None and cand:
+            futures = {stats_pool.submit(espn_player_stats, p["espn_id"], p.get("slug", "")): p
+                       for p in cand if p.get("espn_id")}
+            for future in as_completed(futures):
+                p = futures[future]
+                try:
+                    p["_stats_raw"] = future.result()
+                except Exception:
+                    p["_stats_raw"] = {}
+                p["_stats_loaded"] = True
+        for p in cand:
+            if not p.get("_stats_loaded"):
+                p["_stats_raw"] = {}
 
         # Filter graduated/inactive
         filtered = []
-        sr_grads = [p for p in cand if ((p["_class"] or "").upper().startswith("SR") or
-                    (p["_class"] or "").upper().startswith("GR") or
-                    "5" in (p["_class"] or "") or "6" in (p["_class"] or ""))]
-        stats_results = {}
-        if sr_grads and not skip_stats:
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = {executor.submit(espn_player_stats, p["espn_id"], p.get("slug", "")): p for p in sr_grads}
-                for future in as_completed(futures):
-                    p = futures[future]
-                    try:
-                        stats_results[p["espn_id"]] = future.result()
-                    except Exception:
-                        stats_results[p["espn_id"]] = {}
-
         for p in cand:
             cls = (p["_class"] or "").upper()
             is_fr = cls.startswith("FR") or (p["experience"] or 0) == 0
             is_underclass = cls.startswith("SO") or cls.startswith("JR") or cls.startswith("FR")
             is_sr_grad = cls.startswith("SR") or cls.startswith("GR") or "5" in cls or "6" in cls
-            st = {}
-            if not skip_stats and is_sr_grad:
-                st = stats_results.get(p["espn_id"], {})
-            p["_stats_raw"] = st
+            st = p.get("_stats_raw") or {}
             seasons = sorted([s for s in st.keys() if s.isdigit()], key=lambda x: int(x), reverse=True)
             has_current = str(season) in st
             has_prior = str(prior) in st
@@ -274,13 +290,9 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         cand = filtered
 
         def _depth_key(p):
-            st = p.get("_stats_raw", {}) or {}
-            def _num(v):
-                try:
-                    return float(str(v).replace(",", "")) if v is not None else 0
-                except (ValueError, TypeError):
-                    return 0
-            touches = _num(st.get("receptions", 0)) + _num(st.get("rushingAttempts", 0)) + _num(st.get("completions", 0)) + _num(st.get("tackles", 0))
+            st = p.get("_stats_raw") or {}
+            touches = (_num(st.get("receptions", 0)) + _num(st.get("rushingAttempts", 0))
+                       + _num(st.get("completions", 0)) + _num(st.get("tackles", 0)))
             jersey_priority = 0 if p.get("_had_jersey", False) else 1
             return (jersey_priority, -touches, -(p.get("experience", 0) or 0))
 
@@ -291,14 +303,10 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         cand.sort(key=_depth_key)
         chosen = cand[:slots]
 
-        # fetch stats for chosen (reuse cached)
+        # Stats were fetched in parallel above; keep only current + prior season
+        # and release the full career dict to keep memory flat.
         for p in chosen:
-            st = p.get("_stats_raw", {})
-            if not st and not skip_stats:
-                try:
-                    st = espn_player_stats(p["espn_id"], p.get("slug", ""))
-                except Exception:
-                    st = {}
+            st = p.pop("_stats_raw", None) or {}
             cur = st.get(str(season), {}) or st.get(str(season) + " Season", {}) or {}
             pri = st.get(str(prior), {}) or {}
             seasons = [s for s in st.keys() if s.lower() != "career"]
@@ -358,6 +366,9 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                         break
         team_to_players[tg] = chosen
         all_players.extend(chosen)
+
+    if stats_pool is not None:
+        stats_pool.shutdown(wait=False)
 
     _mark("Step 3: scrape rosters")
 
@@ -467,7 +478,3 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
                             a.get("POVR"), a.get("PSPD"), a.get("PSTR"), a.get("PAWR"),
                             p.get("_confidence")])
     return out_dir
-
-
-# Need players function (import from roster module)
-from roster_gen.db.roster import players as players_list
