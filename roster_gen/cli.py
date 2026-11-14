@@ -7,14 +7,27 @@ from roster_gen import paths
 
 
 def cmd_inspect(args):
-    from roster_gen.ps3.save import decrypt_save
+    from roster_gen.pipeline import _detect_platform
     if not _require_base(args):
         return 2
+    base = os.path.abspath(os.path.expanduser(args.base))
+    kind = _detect_platform(base)
     from roster_gen.db.roster import teams, players, position_name
-    work = args.work or str(paths.WORK_DIR / "run")
-    db_path, _ = decrypt_save(args.base, work)
     from roster_gen.eadb import TDBFile
-    db = TDBFile(open(db_path, "rb").read())
+    if kind == "ps3":
+        from roster_gen.ps3.save import decrypt_save
+        work = args.work or str(paths.WORK_DIR / "run")
+        db_path, _ = decrypt_save(base, work)
+        raw = open(db_path, "rb").read()
+        print("platform: PS3")
+    else:
+        from roster_gen.xbox.save import XboxSave
+        save = XboxSave(base)
+        raw = save.db_bytes
+        print(f"platform: Xbox 360   profile: {save.profile_id}   "
+              f"title: {save.title_id:08X}")
+        print(f"package: {save.name}   db at {save.db_offset} ({save.db_size} bytes)")
+    db = TDBFile(raw)
     probs = db.verify()
     print("verify:", "OK" if not probs else probs)
     ts = teams(db)
@@ -29,18 +42,29 @@ def cmd_inspect(args):
 
 def cmd_copy(args):
     """Byte-identical round-trip proof: decrypt then re-encrypt a save."""
-    from roster_gen.ps3.save import decrypt_save, encrypt_save
+    from roster_gen.pipeline import _detect_platform
     if not _require_base(args):
         return 2
-    work = args.work or str(paths.WORK_DIR / "copy")
+    base = os.path.abspath(os.path.expanduser(args.base))
+    kind = _detect_platform(base)
     out = args.out
     os.makedirs(out, exist_ok=True)
-    decrypt_save(args.base, work)
-    encrypt_save(work, out, args.base)
+    if kind == "xbox360":
+        from roster_gen.xbox.save import XboxSave
+        save = XboxSave(base)
+        out_path = save.save(out)
+        a = open(base, "rb").read()
+        b = open(out_path, "rb").read()
+        print(os.path.basename(out_path), "identical" if a == b else "DIFFERS",
+              len(a), len(b))
+        return 0
+    from roster_gen.ps3.save import decrypt_save, encrypt_save
+    work = args.work or str(paths.WORK_DIR / "copy")
+    decrypt_save(base, work)
+    encrypt_save(work, out, base)
     # verify byte-identical
-    import filecmp, hashlib
     for name in ("PARAM.PFD", "USR-DATA"):
-        a = open(os.path.join(args.base, name), "rb").read()
+        a = open(os.path.join(base, name), "rb").read()
         b = open(os.path.join(out, name), "rb").read()
         print(name, "identical" if a == b else "DIFFERS", len(a), len(b))
     return 0
@@ -48,7 +72,8 @@ def cmd_copy(args):
 
 def _require_base(args):
     if not args.base:
-        print("No base save given. Pass --base /path/to/BLUS#####-ROSTER-XXXX", file=sys.stderr)
+        print("No base save given. Pass --base /path/to/BLUS#####-ROSTER-XXXX "
+              "or /path/to/ROSTER-ROSTER14", file=sys.stderr)
         return False
     return True
 
@@ -60,7 +85,9 @@ def cmd_run(args):
     base = args.base
     out = args.out
     try:
-        out_dir = run(args.year, base, out, rename=not args.keep_name, realignment=args.realignment, rankings=not args.no_rankings, workers=args.workers, skip_stats=args.skip_stats)
+        out_dir = run(args.year, base, out, rename=not args.keep_name, realignment=args.realignment,
+                      rankings=not args.no_rankings, workers=args.workers, skip_stats=args.skip_stats,
+                      platform=args.platform)
         print(f"Output: {out_dir}")
         return 0
     except Exception as e:
@@ -84,7 +111,9 @@ def main(argv=None):
     sp.add_argument("year", type=int)
     sp.add_argument("--base", default=paths.DEFAULT_BASE)
     sp.add_argument("--out", default=None)
-    sp.add_argument("--keep-name", action="store_true", help="keep original save name (safer for PS3)")
+    sp.add_argument("--keep-name", action="store_true", help="keep original save name (PS3 only)")
+    sp.add_argument("--platform", default="auto", choices=("auto", "ps3", "xbox360"),
+                    help="base save platform (default: detect from the file)")
     sp.add_argument("--realignment", action="store_true", help="apply 2026 conference realignment (Phase A)")
     sp.add_argument("--no-rankings", action="store_true", help="skip Top 25 ranking updates")
     sp.add_argument("--workers", type=int, default=10, help="number of parallel downloads (default 10)")

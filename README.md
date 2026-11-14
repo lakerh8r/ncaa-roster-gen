@@ -1,9 +1,9 @@
 # NCAA Football 14 Roster Generator
 
-Build a playable **NCAA Football 14** (PS3) roster save for any season year from
-live ESPN roster data. Ratings are recalculated from real stats, players are
-assigned to NCAA 14 positions and depth charts, and the Top 25 (AP + Coaches) is
-updated in-game.
+Build a playable **NCAA Football 14** roster save for **PS3 or Xbox 360** for any
+season year from live ESPN roster data. Ratings are recalculated from real stats,
+players are assigned to NCAA 14 positions and depth charts, and the Top 25
+(AP + Coaches) is updated in-game.
 
 The tool modifies a roster save you already own. It does **not** include the
 game, any save files, or team art.
@@ -12,12 +12,16 @@ game, any save files, or team art.
 
 - **Windows, Linux, or macOS** (Windows steps below)
 - **Python 3.11+**
-- **A PS3 NCAA Football 14 roster save folder** to use as the base. It must
-  contain `PARAM.PFD` and `USR-DATA`, e.g. `BLUS31159-ROSTER-SOMETHING`.
+- **A base roster save you already own**, either:
+  - **PS3:** a save folder such as `BLUS31159-ROSTER-SOMETHING` containing
+    `PARAM.PFD` and `USR-DATA`, or
+  - **Xbox 360:** the `ROSTER-ROSTER14` file copied off your 360 USB drive, or
+  - any larger `ROSTER-*` file your console already loads.
+
   Community roster packs are widely shared; use one you already have.
-- A PS3 that can copy save data from a USB drive. No jailbreak is needed to
-  copy save data — the generated save keeps your base save's account ID, so
-  build from a save that already loads on your console.
+- **A console that can copy save data from a USB drive.** Build from a save that
+  already loads on your console: the PS3 output keeps the base save's account
+  ID, and the Xbox 360 output keeps the base save's profile ID (XUID).
 
 ## Quick start (Linux / macOS)
 
@@ -30,12 +34,12 @@ cd ncaa-roster-gen
 
 Then:
 
-1. **Base save folder** — click *Browse...* and pick your existing
-   `BLUS#####-ROSTER-...` folder.
+1. **Base save** — click *Browse...* and pick your `BLUS#####-ROSTER-...`
+   PS3 save folder, or your Xbox 360 `ROSTER-ROSTER14` file.
 2. **Output folder** — where the generated save should go.
 3. **Season start year** — e.g. `2026` for the season beginning August 2026.
-4. Leave **Keep original save name** checked (this is the configuration that
-   loads reliably on PS3).
+4. On PS3, leave **Keep original save name** checked (this is the
+   configuration that loads reliably). Xbox 360 always keeps its file name.
 5. Click **Generate** and watch the live log.
 
 A full run takes about **2–3 minutes** the first time (~40 seconds after that,
@@ -85,9 +89,38 @@ The generator writes:
 
 Then launch NCAA Football 14 and load the roster.
 
+## Copying the save to your Xbox 360
+
+The generator writes the same layout the console uses on a USB drive:
+
+```
+<output folder>/Xbox360/Content/<XUID>/454109B6/00000001/ROSTER-ROSTER14
+```
+
+1. Copy the `Xbox360` folder to the **root** of a **FAT32** USB drive.
+2. Plug it into the 360. In *Storage*, open the USB device and copy the roster
+   file to your hard drive (same place the original came from).
+3. Launch NCAA Football 14 and load the roster.
+
+### Signing (read this)
+
+The generator rebuilds the save's SHA-1 hash tree but **cannot re-sign it**: that
+needs Microsoft's private key. So the output is *rehashed, not resigned*.
+
+- **Modded console with DashLaunch:** enable `contpatch` and the rehashed file
+  loads directly.
+- **Stock console:** run the generated `ROSTER-ROSTER14` through **Horizon**
+  (free Windows tool) and use **Rehash & Resign**, then copy it to the USB drive.
+  Horizon's re-signing reuses your own profile, so run it while the file sits in
+  the `<XUID>` folder created by the generator.
+
+If the console says the roster is damaged, it is almost always the signature:
+re-sign it with Horizon and try again.
+
 ## What it does
 
-1. Decrypts the base save (`PARAM.PFD` + `USR-DATA`).
+1. Reads the base save: decrypts `USR-DATA` on PS3, or unpacks the STFS
+   (`CON`) container and slices out the EA database on Xbox 360.
 2. Matches every FBS team to ESPN and downloads rosters.
 3. Downloads per-player season stats (current season + prior season).
 4. Filters out graduated/inactive players and maps everyone to NCAA 14
@@ -97,7 +130,8 @@ Then launch NCAA Football 14 and load the roster.
    current stats exist), assigns jersey numbers, and copies body/face models
    from the closest base player so models are not distorted.
 6. Writes players, depth charts, team ratings, and the AP + Coaches Top 25.
-7. Re-encrypts the save and writes `report.txt` + `roster.csv` next to it.
+7. Re-encrypts the PS3 save (or repacks and rehashes the Xbox 360 save) and
+   writes `report.txt` + `roster.csv` next to it.
 
 `report.txt` is a timestamped run log with per-step timings.
 
@@ -106,17 +140,25 @@ Then launch NCAA Football 14 and load the roster.
 The web UI is optional; everything works from a terminal:
 
 ```bash
+# PS3
 .venv/bin/roster-gen run 2026 --base "/path/to/BLUS31159-ROSTER-XXXX" --out ~/Downloads/NCAA14RosterPack --keep-name
+# Xbox 360
+.venv/bin/roster-gen run 2026 --base "/path/to/ROSTER-ROSTER14" --out ~/Downloads/NCAA14RosterPack
 .venv/bin/roster-gen inspect --base "/path/to/BLUS31159-ROSTER-XXXX"
 .venv/bin/roster-gen copy --base "/path/to/..." --out /tmp/roundtrip
 .venv/bin/roster-gen serve            # web UI on http://127.0.0.1:8765
 ```
 
+The platform is detected from the base save: a folder is PS3, a `CON`/`PIRS`/
+`LIVE` file is Xbox 360. Override it with `--platform ps3` or
+`--platform xbox360`.
+
 Useful flags for `run`:
 
 | Flag | Meaning |
 |---|---|
-| `--keep-name` | Keep the base save's folder name (recommended for PS3) |
+| `--platform auto\|ps3\|xbox360` | Base save type (default: detect) |
+| `--keep-name` | Keep the base save's folder name (recommended for PS3; ignored on 360) |
 | `--workers N` | Parallel downloads (default 10) |
 | `--skip-stats` | Skip ESPN stats; rate from prior season only (instant) |
 | `--no-rankings` | Do not touch the Top 25 |
@@ -144,19 +186,31 @@ Environment variables:
 - **Slow run / lots of retries:** delete `~/.cache/ncaa-roster-gen` to start
   fresh, or check your connection. Players without an ESPN stats page are cached
   and skipped instead of retried.
-- **Xbox 360:** not supported yet. It needs a 360 base save (`.CON`) and profile
-  ID for re-signing.
+- **Xbox 360 says the roster is damaged / won't load:** the tool rehashes but
+  cannot re-sign (no Microsoft private key). On a stock console, run the output
+  through Horizon's *Rehash & Resign*; on a modded console, enable DashLaunch
+  `contpatch`. See [Copying the save to your Xbox 360](#copying-the-save-to-your-xbox-360).
+- **Xbox 360 roster doesn't appear in Storage:** make sure the USB drive is
+  FAT32 and that you copied the whole `Xbox360` folder to its root. The file
+  must stay inside `Content/<XUID>/454109B6/00000001/`.
+- **A team ends up with generic players:** ESPN occasionally has no roster page
+  for a school (seen with Texas, Illinois, UMass, and Idaho at some points in
+  the offseason). The generator logs `no ESPN roster for <team>; keeping base
+  players` and leaves that team's existing players alone rather than writing
+  68 walk-ons.
 
 ## Development
 
 ```bash
 .venv/bin/python -m pytest -q                     # skips save tests without a base
 NCAA_BASE_SAVE=/path/to/save .venv/bin/python -m pytest -q
+NCAA_XBOX_BASE=/path/to/ROSTER-ROSTER14 .venv/bin/python -m pytest -q
 ```
 
 Layout:
 
 - `roster_gen/ps3/` — PS3 save crypto (`PARAM.PFD`, `PARAM.SFO`, USR-DATA)
+- `roster_gen/xbox/` — Xbox 360 STFS container + EA DB (see `docs/STFS_FORMAT.md`)
 - `roster_gen/eadb.py` — EA TDB reader/writer (see `docs/EA_DB_FORMAT.md`)
 - `roster_gen/sources/` — ESPN adapters, team mapping, Top 25
 - `roster_gen/ratings/` — rating engine (see `ratings_spec.md`)

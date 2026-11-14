@@ -55,12 +55,16 @@ INDEX = r"""<!doctype html>
   #modalbox li:hover { background:#eee; }
   #modalbox .dir { color:#0066cc; }
   #modalbox .file { color:#555; }
+  #modalbox .file.pickable:hover { background:#eee; cursor:pointer; }
   #breadcrumb { font-size:0.85em; color:#333; margin-bottom:0.5em; word-break:break-all; }
 </style>
 <script>
   let activeField = null;
+  let allowFiles = false;
   async function openBrowse(fieldId) {
     activeField = fieldId;
+    allowFiles = fieldId === 'base';
+    document.getElementById('modalTitle').textContent = allowFiles ? 'Select PS3 save folder or Xbox 360 ROSTER-* file' : 'Select folder';
     const cur = document.getElementById(fieldId).value || '__HOME__';
     document.getElementById('modal').style.display = 'block';
     await loadDir(cur);
@@ -89,7 +93,10 @@ INDEX = r"""<!doctype html>
     for (const f of d.files) {
       const li = document.createElement('li');
       li.textContent = '\uD83D\uDCC4 ' + f;
-      li.className = 'file';
+      li.className = 'file' + (allowFiles ? ' pickable' : '');
+      if (allowFiles) {
+        li.onclick = () => { document.getElementById(activeField).value = d.path + '/' + f; closeModal(); };
+      }
       ul.appendChild(li);
     }
   }
@@ -101,7 +108,7 @@ INDEX = r"""<!doctype html>
     log.textContent = s.lines.join('\n');
     log.scrollTop = log.scrollHeight;
     if (s.done) {
-      document.getElementById('status').textContent = s.error ? ('ERROR: ' + s.error) : ('Done! Output: ' + s.output + '  --  Copy the PS3 folder to your USB root, or upload the save folder to /dev_hdd0/home/00000001/savedata/ via FTP.');
+      document.getElementById('status').textContent = s.error ? ('ERROR: ' + s.error) : ('Done! Output: ' + s.output + '  --  See the log below for where to copy the save.');
       return;
     }
     setTimeout(poll, 1000);
@@ -122,9 +129,9 @@ INDEX = r"""<!doctype html>
 </head>
 <body>
   <h1>NCAA Football 14 Roster Generator</h1>
-  <label>Base save folder (your own PS3 roster save):
+  <label>Base save (PS3 save folder or Xbox 360 ROSTER-* file):
     <div class="row">
-      <input id="base" type="text" value="__DEFAULT_BASE__" placeholder="Browse to your BLUS-ROSTER-... save folder">
+      <input id="base" type="text" value="__DEFAULT_BASE__" placeholder="Browse to your PS3 roster save folder or ROSTER-ROSTER14 file">
       <button onclick="openBrowse('base')">Browse...</button>
     </div>
   </label>
@@ -135,7 +142,7 @@ INDEX = r"""<!doctype html>
     </div>
   </label>
   <label>Season start year (e.g. 2026): <input id="year" type="number" value="2026"></label>
-  <label><input id="keepname" type="checkbox" checked> Keep original save name (safer for PS3)</label>
+  <label><input id="keepname" type="checkbox" checked> Keep original save name (PS3 only; Xbox 360 always keeps it)</label>
   <label><input id="realignment" type="checkbox"> Apply 2026 conference realignment (may cause schedule freeze - experimental)</label>
   <label><input id="rankings" type="checkbox" checked> Update Top 25 rankings (AP + Coaches)</label>
   <label><input id="skipstats" type="checkbox"> Skip stats (instant, uses priors only)</label>
@@ -146,7 +153,7 @@ INDEX = r"""<!doctype html>
   <!-- folder browser modal -->
   <div id="modal">
     <div id="modalbox">
-      <h3>Select folder</h3>
+      <h3 id="modalTitle">Select folder</h3>
       <div id="breadcrumb"></div>
       <ul id="dirlist"></ul>
       <p>

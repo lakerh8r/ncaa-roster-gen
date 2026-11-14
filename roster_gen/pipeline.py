@@ -56,19 +56,34 @@ def _class_to_year(cls, exp):
     return min(4, exp or 0)
 
 
+def _detect_platform(base):
+    """PS3 saves are folders; Xbox 360 saves are STFS files."""
+    if os.path.isdir(base):
+        return "ps3"
+    if os.path.isfile(base):
+        from roster_gen.xbox.save import is_xbox_save
+        if is_xbox_save(base):
+            return "xbox360"
+        raise ValueError(
+            f"{base} is not an Xbox 360 roster file. Pick your PS3 save folder "
+            "(the one containing PARAM.PFD) or a ROSTER-* file copied off the "
+            "Xbox 360 USB drive.")
+    raise ValueError(f"Base save not found: {base}")
+
+
 def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
-        rankings=True, workers=10, skip_stats=False):
+        rankings=True, workers=10, skip_stats=False, platform="auto"):
     season = year
     prior = year - 1
 
     if not base_dir:
         raise ValueError(
-            "No base save folder selected. Browse to your PS3 roster save folder "
-            "(the one containing PARAM.PFD and USR-DATA)."
-        )
+            "No base save selected. Browse to your PS3 roster save folder "
+            "(containing PARAM.PFD) or to your Xbox 360 ROSTER-* file.")
     base_dir = os.path.abspath(os.path.expanduser(base_dir))
-    if not os.path.isdir(base_dir):
-        raise ValueError(f"Base save folder not found: {base_dir}")
+    kind = _detect_platform(base_dir) if platform in (None, "", "auto") else platform
+    if kind not in ("ps3", "xbox360"):
+        raise ValueError(f"unknown platform {platform!r}")
 
     if out_dir is None:
         out_dir = str(paths.DEFAULT_OUT)
@@ -77,11 +92,13 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
 
     # Derive the title id from the base save (e.g. BLUS31159-ROSTER-XXXX) so
     # this works with any region/folder name instead of one hardcoded name.
-    base_name = os.path.basename(os.path.normpath(base_dir))
-    title_id = base_name.split("-ROSTER-")[0] if "-ROSTER-" in base_name else "BLUS31159"
-    save_name = f"{title_id}-ROSTER-{season}" if rename else base_name
-    save_dir = os.path.join(out_dir, "PS3", "SAVEDATA", save_name)
-    os.makedirs(save_dir, exist_ok=True)
+    save_dir = None
+    if kind == "ps3":
+        base_name = os.path.basename(os.path.normpath(base_dir))
+        title_id = base_name.split("-ROSTER-")[0] if "-ROSTER-" in base_name else "BLUS31159"
+        save_name = f"{title_id}-ROSTER-{season}" if rename else base_name
+        save_dir = os.path.join(out_dir, "PS3", "SAVEDATA", save_name)
+        os.makedirs(save_dir, exist_ok=True)
 
     _t0 = time.time()
     log_lines = []
@@ -104,17 +121,27 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         log(f"  --> {label} completed in {_dur(seconds)}")
         _step_t["last"] = now
 
-    log("[1/6] Decrypting base save...")
+    log("[1/6] Reading base save..." if kind == "xbox360" else "[1/6] Decrypting base save...")
     work = os.path.join(str(paths.WORK_DIR), f"run_{season}")
     os.makedirs(work, exist_ok=True)
-    db_path, _ = decrypt_save(base_dir, work)
-    db = TDBFile(open(db_path, "rb").read())
+    xsave = None
+    if kind == "ps3":
+        db_path, _ = decrypt_save(base_dir, work)
+        raw_db = open(db_path, "rb").read()
+    else:
+        from roster_gen.xbox.save import XboxSave
+        xsave = XboxSave(base_dir)
+        raw_db = xsave.db_bytes
+        with open(os.path.join(work, "payload.bin"), "wb") as f:
+            f.write(xsave.payload)
+        log(f"      {xsave.name}: {len(raw_db):,} byte DB, profile {xsave.profile_id}")
+    db = TDBFile(raw_db)
     assert db.verify() == [], "base DB failed verification"
 
     base_teams = [t for t in teams(db) if t["type"] == 0]
     ncaa_names = [t["name"] for t in base_teams]
     log(f"      {len(base_teams)} FBS teams")
-    _mark("Step 1: decrypt base save")
+    _mark("Step 1: read base save")
 
     log("[2/6] Mapping teams to ESPN...")
     tmap = build_team_map(ncaa_names)
@@ -182,6 +209,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
             continue
         roster = roster_cache.get(espn_id, [])
         if not roster:
+            log(f"        no ESPN roster for {t['name']}; keeping base players")
             team_to_players[tg] = []
             continue
 
@@ -404,7 +432,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     _mark("Step 4: rate players")
 
     log("[5/6] Writing DB...")
-    base_db = TDBFile(open(db_path, "rb").read())
+    base_db = TDBFile(raw_db)
     ranking_map = None
     if rankings:
         log("  Fetching AP Top 25 + Coaches Poll...")
@@ -421,26 +449,40 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     log("  Writing team ratings and conference data...")
     _mark("Step 5: write DB")
 
-    log(f"[6/6] Encrypting save -> {out_dir}")
+    log(f"[6/6] Repacking Xbox 360 save -> {out_dir}" if kind == "xbox360"
+        else f"[6/6] Encrypting save -> {out_dir}")
     new_db = db.build()
-    CONTAINER_SIZE = 1433600
-    if len(new_db) < CONTAINER_SIZE:
-        new_db = new_db + b"\x00" * (CONTAINER_SIZE - len(new_db))
-    with open(os.path.join(work, "USR-DATA"), "wb") as f:
-        f.write(new_db)
-    from roster_gen.ps3.save import encrypt_save
-    encrypt_save(work, save_dir, base_dir, sfo_source_dir=None, account_id=None)
-    _mark("Step 6: encrypt save")
+    if kind == "ps3":
+        CONTAINER_SIZE = 1433600
+        if len(new_db) < CONTAINER_SIZE:
+            new_db = new_db + b"\x00" * (CONTAINER_SIZE - len(new_db))
+        with open(os.path.join(work, "USR-DATA"), "wb") as f:
+            f.write(new_db)
+        from roster_gen.ps3.save import encrypt_save
+        encrypt_save(work, save_dir, base_dir, sfo_source_dir=None, account_id=None)
+        out_save = save_dir
+    else:
+        xsave.replace_db(new_db)
+        out_save = xsave.save(out_dir)
+    _mark("Step 6: write save")
 
     elapsed = time.time() - _t0
     log(f"Done. Output root: {out_dir}")
-    log(f"Save folder: {save_dir}")
-    log("")
-    log("=== WHERE TO COPY ON YOUR PS3 ===")
-    log("USB drive: copy the 'PS3' folder to the ROOT of your USB drive.")
-    log("  Then on PS3: Game -> Save Data Utility (PS3) -> copy from USB to HDD.")
-    log("FTP: upload the save folder into /dev_hdd0/home/00000001/savedata/")
-    log("  (skip the PS3/SAVEDATA wrapper for FTP)")
+    if kind == "ps3":
+        log(f"Save folder: {save_dir}")
+        log("")
+        log("=== WHERE TO COPY ON YOUR PS3 ===")
+        log("USB drive: copy the 'PS3' folder to the ROOT of your USB drive.")
+        log("  Then on PS3: Game -> Save Data Utility (PS3) -> copy from USB to HDD.")
+        log("FTP: upload the save folder into /dev_hdd0/home/00000001/savedata/")
+        log("  (skip the PS3/SAVEDATA wrapper for FTP)")
+    else:
+        log(f"Save file: {out_save}")
+        log("")
+        log("=== WHERE TO COPY ON YOUR XBOX 360 ===")
+        log("Copy the 'Xbox360' folder to the ROOT of a FAT32 USB drive, then")
+        log("copy the roster back to your 360's hard drive from Storage.")
+        log("Stock console? Rehash & Resign the file with Horizon first.")
     log("Then launch NCAA Football 14.")
     log("")
     log(f"Total runtime: {_dur(elapsed)}")

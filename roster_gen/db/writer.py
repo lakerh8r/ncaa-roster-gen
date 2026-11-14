@@ -121,6 +121,14 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
     total_teams = len(team_to_players)
     for ti, (tgid, players) in enumerate(team_to_players.items()):
         slots = rows_by_team.get(tgid, [])
+        if not players:
+            # No data for this team (ESPN had no roster). Keep the base rows
+            # instead of replacing 68 real players with "Walk On" and 00 jerseys.
+            if (ti + 1) % 10 == 0 or ti == total_teams - 1:
+                log(f"    Writing players... ({ti + 1}/{total_teams} teams)")
+            continue
+        used = {int(p.get("jersey") or 0) for p in players}
+        spare = (n for n in range(1, 100) if n not in used)
         for slot_idx, row_i in enumerate(slots):
             rec = play.record(row_i)
             if slot_idx < len(players):
@@ -130,13 +138,14 @@ def write_roster(db, team_to_players, base_db=None, realignment=False, rankings=
             else:
                 _set_player_row(play, rec, {
                     "first": "Walk", "last": "On", "pos": 1, "year": 1,
-                    "height": 72, "weight": 190, "jersey": 0, "team": tgid,
+                    "height": 72, "weight": 190, "jersey": next(spare, 0),
+                    "team": tgid,
                 }, {"POVR": 45, "PSPD": 60, "PSTR": 55, "PAWR": 45}, base_db=base_db)
         if (ti + 1) % 10 == 0 or ti == total_teams - 1:
             log(f"    Writing players... ({ti + 1}/{total_teams} teams)")
 
     dcht = db.table("DCHT")
-    matched_tgids = set(team_to_players.keys())
+    matched_tgids = {tgid for tgid, players in team_to_players.items() if players}
     base_dcht_rows = []
     if base_db is not None:
         base_dcht = base_db.table("DCHT")
