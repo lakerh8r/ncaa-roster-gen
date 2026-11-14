@@ -7,7 +7,9 @@ import time
 
 import httpx
 
-CACHE_DIR = os.environ.get("ROSTER_CACHE", "/tmp/opencode/roster_cache")
+from roster_gen.paths import CACHE_DIR as _CACHE_ROOT
+
+CACHE_DIR = os.environ.get("ROSTER_CACHE", str(_CACHE_ROOT / "roster_cache"))
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 UA = "Mozilla/5.0"

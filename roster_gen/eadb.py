@@ -3,7 +3,7 @@
 eadb.py -- reader/writer for the EA "TDB" database used by NCAA Football 14 (PS3)
 and other last-gen EA Sports games (Madden, NCAA, Head Coach).
 
-Format documented in /tmp/opencode/EA_DB_FORMAT.md.
+Format documented in docs/EA_DB_FORMAT.md.
 Independently cross-checked against bep713/madden-file-tools (TDBParser/TDBWriter).
 
 Quick use:

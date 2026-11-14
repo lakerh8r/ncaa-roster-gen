@@ -4,10 +4,13 @@ import threading
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from roster_gen import paths
+
 app = FastAPI(title="NCAA Football 14 Roster Generator")
 
-DEFAULT_BASE = "/home/lakerh8r/Downloads/NCAA14RosterPack/13-14 Release Year NCAA14/PS3 end of season 2013-14 Roster posted by majesty95/PS3 end of season 2013-14 Roster posted by majesty95/PS3/SAVEDATA/BLUS31159-ROSTER-JHASLEY10"
-DEFAULT_OUT = "/home/lakerh8r/Downloads/NCAA14RosterPack"
+DEFAULT_BASE = paths.DEFAULT_BASE
+DEFAULT_OUT = str(paths.DEFAULT_OUT)
+HOME = os.path.expanduser("~")
 
 STATE = {"running": False, "lines": [], "done": False, "output": "", "error": ""}
 
@@ -58,7 +61,7 @@ INDEX = r"""<!doctype html>
   let activeField = null;
   async function openBrowse(fieldId) {
     activeField = fieldId;
-    const cur = document.getElementById(fieldId).value || '/home/lakerh8r';
+    const cur = document.getElementById(fieldId).value || '__HOME__';
     document.getElementById('modal').style.display = 'block';
     await loadDir(cur);
   }
@@ -98,7 +101,7 @@ INDEX = r"""<!doctype html>
     log.textContent = s.lines.join('\n');
     log.scrollTop = log.scrollHeight;
     if (s.done) {
-      document.getElementById('status').textContent = s.error ? ('ERROR: ' + s.error) : ('Done! Output: ' + s.output + '  --  Copy the PS3 folder to your USB root (or upload BLUS31159-ROSTER-* to /dev_hdd0/home/00000001/savedata/ via FTP).');
+      document.getElementById('status').textContent = s.error ? ('ERROR: ' + s.error) : ('Done! Output: ' + s.output + '  --  Copy the PS3 folder to your USB root, or upload the save folder to /dev_hdd0/home/00000001/savedata/ via FTP.');
       return;
     }
     setTimeout(poll, 1000);
@@ -119,9 +122,9 @@ INDEX = r"""<!doctype html>
 </head>
 <body>
   <h1>NCAA Football 14 Roster Generator</h1>
-  <label>Base save folder (your own PS3 save, or leave default):
+  <label>Base save folder (your own PS3 roster save):
     <div class="row">
-      <input id="base" type="text" value="__DEFAULT_BASE__">
+      <input id="base" type="text" value="__DEFAULT_BASE__" placeholder="Browse to your BLUS-ROSTER-... save folder">
       <button onclick="openBrowse('base')">Browse...</button>
     </div>
   </label>
@@ -152,7 +155,7 @@ INDEX = r"""<!doctype html>
       </p>
     </div>
   </div>
-</body></html>""".replace("__DEFAULT_OUT__", DEFAULT_OUT).replace("__DEFAULT_BASE__", DEFAULT_BASE)
+</body></html>""".replace("__DEFAULT_OUT__", DEFAULT_OUT).replace("__DEFAULT_BASE__", DEFAULT_BASE).replace("__HOME__", HOME)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -169,8 +172,10 @@ def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int
 
 
 @app.get("/browse")
-def browse(path: str = "/home/lakerh8r"):
+def browse(path: str = ""):
     # normalize
+    if not path:
+        path = HOME
     path = os.path.abspath(os.path.expanduser(path))
     if not os.path.isdir(path):
         path = os.path.dirname(path) or "/"

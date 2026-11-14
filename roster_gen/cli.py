@@ -3,13 +3,15 @@ import argparse
 import os
 import sys
 
-DEFAULT_BASE = "/home/lakerh8r/Downloads/NCAA14RosterPack/13-14 Release Year NCAA14/PS3 end of season 2013-14 Roster posted by majesty95/PS3 end of season 2013-14 Roster posted by majesty95/PS3/SAVEDATA/BLUS31159-ROSTER-JHASLEY10"
+from roster_gen import paths
 
 
 def cmd_inspect(args):
     from roster_gen.ps3.save import decrypt_save
+    if not _require_base(args):
+        return 2
     from roster_gen.db.roster import teams, players, position_name
-    work = args.work or "/tmp/opencode/scratchpad/run"
+    work = args.work or str(paths.WORK_DIR / "run")
     db_path, _ = decrypt_save(args.base, work)
     from roster_gen.eadb import TDBFile
     db = TDBFile(open(db_path, "rb").read())
@@ -28,7 +30,9 @@ def cmd_inspect(args):
 def cmd_copy(args):
     """Byte-identical round-trip proof: decrypt then re-encrypt a save."""
     from roster_gen.ps3.save import decrypt_save, encrypt_save
-    work = args.work or "/tmp/opencode/scratchpad/copy"
+    if not _require_base(args):
+        return 2
+    work = args.work or str(paths.WORK_DIR / "copy")
     out = args.out
     os.makedirs(out, exist_ok=True)
     decrypt_save(args.base, work)
@@ -42,8 +46,17 @@ def cmd_copy(args):
     return 0
 
 
+def _require_base(args):
+    if not args.base:
+        print("No base save given. Pass --base /path/to/BLUS#####-ROSTER-XXXX", file=sys.stderr)
+        return False
+    return True
+
+
 def cmd_run(args):
     from roster_gen.pipeline import run
+    if not _require_base(args):
+        return 2
     base = args.base
     out = args.out
     try:
@@ -59,17 +72,17 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="roster-gen")
     sub = p.add_subparsers(dest="cmd", required=True)
     sp = sub.add_parser("inspect", help="inspect a base save")
-    sp.add_argument("--base", default=DEFAULT_BASE)
+    sp.add_argument("--base", default=paths.DEFAULT_BASE)
     sp.add_argument("--work", default=None)
     sp.set_defaults(func=cmd_inspect)
     sp = sub.add_parser("copy", help="byte-identical round-trip of a save")
-    sp.add_argument("--base", default=DEFAULT_BASE)
+    sp.add_argument("--base", default=paths.DEFAULT_BASE)
     sp.add_argument("--out", required=True)
     sp.add_argument("--work", default=None)
     sp.set_defaults(func=cmd_copy)
     sp = sub.add_parser("run", help="generate a roster for a season year")
     sp.add_argument("year", type=int)
-    sp.add_argument("--base", default=DEFAULT_BASE)
+    sp.add_argument("--base", default=paths.DEFAULT_BASE)
     sp.add_argument("--out", default=None)
     sp.add_argument("--keep-name", action="store_true", help="keep original save name (safer for PS3)")
     sp.add_argument("--realignment", action="store_true", help="apply 2026 conference realignment (Phase A)")

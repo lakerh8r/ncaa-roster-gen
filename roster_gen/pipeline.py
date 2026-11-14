@@ -11,6 +11,7 @@ from roster_gen.db.writer import write_roster
 from roster_gen.sources.espn import espn_team_roster, espn_player_stats, map_position
 from roster_gen.sources.team_map import build_team_map
 from roster_gen.ratings.engine import rate_players
+from roster_gen import paths
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
@@ -59,10 +60,26 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         rankings=True, workers=10, skip_stats=False):
     season = year
     prior = year - 1
+
+    if not base_dir:
+        raise ValueError(
+            "No base save folder selected. Browse to your PS3 roster save folder "
+            "(the one containing PARAM.PFD and USR-DATA)."
+        )
+    base_dir = os.path.abspath(os.path.expanduser(base_dir))
+    if not os.path.isdir(base_dir):
+        raise ValueError(f"Base save folder not found: {base_dir}")
+
     if out_dir is None:
-        out_dir = "/home/lakerh8r/Downloads/NCAA14RosterPack"
+        out_dir = str(paths.DEFAULT_OUT)
+    out_dir = os.path.abspath(os.path.expanduser(out_dir))
     os.makedirs(out_dir, exist_ok=True)
-    save_name = f"BLUS31159-ROSTER-{season}" if rename else "BLUS31159-ROSTER-JHASLEY10"
+
+    # Derive the title id from the base save (e.g. BLUS31159-ROSTER-XXXX) so
+    # this works with any region/folder name instead of one hardcoded name.
+    base_name = os.path.basename(os.path.normpath(base_dir))
+    title_id = base_name.split("-ROSTER-")[0] if "-ROSTER-" in base_name else "BLUS31159"
+    save_name = f"{title_id}-ROSTER-{season}" if rename else base_name
     save_dir = os.path.join(out_dir, "PS3", "SAVEDATA", save_name)
     os.makedirs(save_dir, exist_ok=True)
 
@@ -88,7 +105,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         _step_t["last"] = now
 
     log("[1/6] Decrypting base save...")
-    work = os.path.join("/tmp/opencode/scratchpad", f"run_{season}")
+    work = os.path.join(str(paths.WORK_DIR), f"run_{season}")
     os.makedirs(work, exist_ok=True)
     db_path, _ = decrypt_save(base_dir, work)
     db = TDBFile(open(db_path, "rb").read())
@@ -422,7 +439,7 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     log("=== WHERE TO COPY ON YOUR PS3 ===")
     log("USB drive: copy the 'PS3' folder to the ROOT of your USB drive.")
     log("  Then on PS3: Game -> Save Data Utility (PS3) -> copy from USB to HDD.")
-    log("FTP: upload 'BLUS31159-ROSTER-...' into /dev_hdd0/home/00000001/savedata/")
+    log("FTP: upload the save folder into /dev_hdd0/home/00000001/savedata/")
     log("  (skip the PS3/SAVEDATA wrapper for FTP)")
     log("Then launch NCAA Football 14.")
     log("")
