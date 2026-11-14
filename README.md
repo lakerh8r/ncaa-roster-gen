@@ -21,7 +21,7 @@ game, any save files, or team art.
 ## Quick start (Linux)
 
 ```bash
-git clone <your-repo-url> ncaa-roster-gen
+git clone https://github.com/kamswall-coder/ncaa-roster-gen.git
 cd ncaa-roster-gen
 ./setup.sh          # creates .venv, installs deps, adds an app-menu entry
 ./launch.sh         # starts the local web UI
