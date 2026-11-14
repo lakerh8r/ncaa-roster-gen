@@ -141,3 +141,9 @@ Layout:
   majesty95.
 - ESPN data belongs to ESPN; NCAA Football 14 belongs to EA. This is a
   fan-made tool for personal use, with no affiliation.
+- The PS3 save keys in `roster_gen/ps3/keys.py` are the publicly documented
+  PS3 save-data keys; they are required to read and write save files.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
