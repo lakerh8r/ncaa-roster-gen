@@ -132,6 +132,34 @@ INDEX = r"""<!doctype html>
     }
     setTimeout(poll, 1000);
   }
+  function selectConsole(c) {
+    const isPS3 = c === 'ps3';
+    document.getElementById('btnPS3').classList.toggle('active', isPS3);
+    document.getElementById('btnXbox').classList.toggle('active', !isPS3);
+    document.getElementById('panel').style.display = 'block';
+    document.getElementById('ps3Opts').style.display = isPS3 ? 'block' : 'none';
+    document.getElementById('xboxOpts').style.display = isPS3 ? 'none' : 'block';
+    document.getElementById('base').placeholder = isPS3 ? 'Browse to your BLUS-ROSTER-... save folder' : 'Browse to your ROSTER-ROSTER14 file';
+    document.getElementById('baseHint').textContent = isPS3
+      ? 'A folder containing PARAM.PFD and USR-DATA.'
+      : 'The ROSTER-* file copied off your Xbox 360 USB drive.';
+    document.getElementById('consoleBadge').textContent = 'Selected: ' + (isPS3 ? 'PlayStation 3' : 'Xbox 360');
+    try { localStorage.setItem('ncaa_console', c); } catch(e) {}
+  }
+  function start() {
+    const y = document.getElementById('year').value;
+    const o = document.getElementById('out').value;
+    const b = document.getElementById('base').value;
+    const r = document.getElementById('realignment').checked ? 1 : 0;
+    const rk = document.getElementById('rankings').checked ? 1 : 0;
+    const ss = document.getElementById('skipstats').checked ? 1 : 0;
+    const console = (document.getElementById('btnPS3').classList.contains('active')) ? 'ps3' : 'xbox360';
+    const modded = (console === 'xbox360') ? (document.getElementById('moddedYes').checked ? 1 : 0) : 0;
+    const keepname = (console === 'ps3') ? (document.getElementById('keepname').checked ? 1 : 0) : 0;
+    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+keepname+'&realignment='+r+'&rankings='+rk+'&skipstats='+ss+'&console='+console+'&modded='+modded, {method:'POST'});
+    document.getElementById('status').textContent = 'Running...';
+    setTimeout(poll, 500);
+  }
   function resignExisting() {
     const f = prompt('Path to ROSTER-* file to re-sign:');
     if (!f) return;
