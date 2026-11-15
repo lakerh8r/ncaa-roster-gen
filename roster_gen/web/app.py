@@ -23,7 +23,7 @@ def _horizon_path():
 STATE = {"running": False, "lines": [], "done": False, "output": "", "error": "", "horizon": _horizon_path()}
 
 
-def _run(year, base_dir, out_dir, keepname, realignment, rankings, skip_stats, resign=False):
+def _run(year, base_dir, out_dir, keepname, realignment, rankings, skip_stats, resign=False, platform="auto"):
     global STATE
     STATE = {"running": True, "lines": [], "done": False, "output": "", "error": "",
              "horizon": _horizon_path()}
@@ -35,7 +35,7 @@ def _run(year, base_dir, out_dir, keepname, realignment, rankings, skip_stats, r
 
     try:
         from roster_gen.pipeline import run
-        out = run(year, base_dir, out_dir, log=log, rename=not keepname, realignment=realignment, rankings=rankings, workers=10, skip_stats=skip_stats, resign=resign)
+        out = run(year, base_dir, out_dir, log=log, rename=not keepname, realignment=realignment, rankings=rankings, workers=10, skip_stats=skip_stats, resign=resign, platform=platform)
         STATE["output"] = out
     except Exception as e:
         import traceback
@@ -52,6 +52,7 @@ INDEX = r"""<!doctype html>
   body { font-family: monospace; max-width: 900px; margin: 2em auto; }
   #log { background:#111; color:#0f0; padding:1em; height:400px; overflow:auto; white-space:pre-wrap; border-radius:6px; }
   button { padding:0.5em 1em; cursor:pointer; }
+  button.active { background:#0066cc; color:#fff; }
   input { padding:0.3em; }
   label { display:block; margin:0.5em 0; }
   .row { display:flex; gap:0.5em; align-items:center; }
@@ -104,7 +105,16 @@ INDEX = r"""<!doctype html>
       li.textContent = '\uD83D\uDCC4 ' + f;
       li.className = 'file' + (allowFiles ? ' pickable' : '');
       if (allowFiles) {
-        li.onclick = () => { document.getElementById(activeField).value = d.path + '/' + f; closeModal(); };
+        li.onclick = () => {
+          document.getElementById(activeField).value = d.path + '/' + f;
+          if (activeField === 'base') {
+            const isFile = true;
+            const lower = f.toLowerCase();
+            const xbox = lower.startsWith('roster') || lower.endsWith('.con');
+            selectConsole(xbox ? 'xbox360' : 'ps3');
+          }
+          closeModal();
+        };
       }
       ul.appendChild(li);
     }
@@ -130,14 +140,18 @@ INDEX = r"""<!doctype html>
   }
   fetch('/horizon').then(r=>r.json()).then(d=>{
     const el = document.getElementById('horizonStatus');
+    if (!el) return;
     if (d.found) {
-      el.textContent = 'Horizon found: ' + d.path + '  (stock-console re-sign available)';
-      document.getElementById('resign').checked = true;
+      el.textContent = 'Horizon found: ' + d.path;
     } else {
-      el.textContent = 'Horizon not found. Stock-console users: install Horizon or use a modded console with DashLaunch contpatch.';
-      document.getElementById('resign').disabled = true;
+      el.textContent = 'Horizon not found. Stock consoles will need a manual Rehash & Resign (see README).';
     }
   });
+  // restore console selection
+  try {
+    const saved = localStorage.getItem('ncaa_console');
+    if (saved === 'ps3' || saved === 'xbox360') selectConsole(saved);
+  } catch(e) {}
     const y = document.getElementById('year').value;
     const o = document.getElementById('out').value;
     const b = document.getElementById('base').value;
@@ -145,8 +159,10 @@ INDEX = r"""<!doctype html>
     const r = document.getElementById('realignment').checked ? 1 : 0;
     const rk = document.getElementById('rankings').checked ? 1 : 0;
     const ss = document.getElementById('skipstats').checked ? 1 : 0;
-    const rs = document.getElementById('resign').checked ? 1 : 0;
-    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+k+'&realignment='+r+'&rankings='+rk+'&skipstats='+ss+'&resign='+rs, {method:'POST'});
+    const console = (document.getElementById('btnPS3').classList.contains('active')) ? 'ps3' : 'xbox360';
+    const modded = (console === 'xbox360') ? (document.getElementById('moddedYes').checked ? 1 : 0) : 0;
+    const keepname = (console === 'ps3') ? (document.getElementById('keepname').checked ? 1 : 0) : 0;
+    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+keepname+'&realignment='+r+'&rankings='+rk+'&skipstats='+ss+'&console='+console+'&modded='+modded, {method:'POST'});
     document.getElementById('status').textContent = 'Running...';
     setTimeout(poll, 500);
   }
@@ -154,31 +170,55 @@ INDEX = r"""<!doctype html>
 </head>
 <body>
   <h1>NCAA Football 14 Roster Generator</h1>
-  <label>Base save (PS3 save folder or Xbox 360 ROSTER-* file):
-    <div class="row">
-      <input id="base" type="text" value="__DEFAULT_BASE__" placeholder="Browse to your PS3 roster save folder or ROSTER-ROSTER14 file">
-      <button onclick="openBrowse('base')">Browse...</button>
+
+  <p id="consolePrompt" style="font-weight:bold;">What are you building for?</p>
+  <div class="row" style="margin-bottom:1em;">
+    <button id="btnPS3" onclick="selectConsole('ps3')">PlayStation 3</button>
+    <button id="btnXbox" onclick="selectConsole('xbox360')">Xbox 360</button>
+  </div>
+  <p id="consoleBadge" style="color:#555; font-size:0.9em;"></p>
+
+  <div id="panel" style="display:none;">
+    <label>Base save:
+      <div class="row">
+        <input id="base" type="text" value="__DEFAULT_BASE__" placeholder="">
+        <button onclick="openBrowse('base')">Browse...</button>
+      </div>
+      <span id="baseHint" style="font-size:0.85em; color:#555;"></span>
+    </label>
+
+    <label>Output folder:
+      <div class="row">
+        <input id="out" type="text" value="__DEFAULT_OUT__">
+        <button onclick="openBrowse('out')">Browse...</button>
+      </div>
+    </label>
+
+    <label>Season start year (e.g. 2026): <input id="year" type="number" value="2026"></label>
+
+    <div id="ps3Opts" style="display:none;">
+      <label><input id="keepname" type="checkbox" checked> Keep original save name (recommended — PS3 rejects renamed saves)</label>
     </div>
-  </label>
-  <label>Output folder:
-    <div class="row">
-      <input id="out" type="text" value="__DEFAULT_OUT__">
-      <button onclick="openBrowse('out')">Browse...</button>
+
+    <div id="xboxOpts" style="display:none;">
+      <p style="margin:0.5em 0;">Is your Xbox 360 modded? (DashLaunch with contpatch)</p>
+      <label><input type="radio" name="modded" value="1" id="moddedYes"> Yes — modded console (no extra steps)</label><br>
+      <label><input type="radio" name="modded" value="0" id="moddedNo" checked> No — stock console</label>
+      <p id="horizonStatus" style="font-size:0.85em; color:#555; margin:0.3em 0;"></p>
     </div>
-  </label>
-  <label>Season start year (e.g. 2026): <input id="year" type="number" value="2026"></label>
-  <label><input id="keepname" type="checkbox" checked> Keep original save name (PS3 only; Xbox 360 always keeps it)</label>
-  <label><input id="realignment" type="checkbox"> Apply 2026 conference realignment (may cause schedule freeze - experimental)</label>
-  <label><input id="rankings" type="checkbox" checked> Update Top 25 rankings (AP + Coaches)</label>
-  <label><input id="skipstats" type="checkbox"> Skip stats (instant, uses priors only)</label>
-  <label><input id="resign" type="checkbox"> Re-sign for stock console (uses Horizon if found)</label>
-  <p>
-    <button onclick="start()">Generate</button>
-    <button onclick="resignExisting()">Re-sign existing file...</button>
-  </p>
-  <p id="horizonStatus"></p>
-  <p id="status"></p>
-  <div id="log"></div>
+
+    <details style="margin:0.5em 0;">
+      <summary>Advanced options</summary>
+      <label><input id="realignment" type="checkbox"> Apply 2026 conference realignment (may cause schedule freeze - experimental)</label><br>
+      <label><input id="rankings" type="checkbox" checked> Update Top 25 rankings (AP + Coaches)</label><br>
+      <label><input id="skipstats" type="checkbox"> Skip stats (instant, uses priors only)</label>
+    </details>
+
+    <p><button onclick="start()">Generate</button>
+       <button onclick="resignExisting()">Re-sign existing file...</button></p>
+    <p id="status"></p>
+    <div id="log"></div>
+  </div>
 
   <!-- folder browser modal -->
   <div id="modal">
@@ -201,10 +241,11 @@ def index():
 
 
 @app.post("/generate")
-def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int = 0, rankings: int = 1, skipstats: int = 0, resign: int = 0):
+def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int = 0, rankings: int = 1, skipstats: int = 0, console: str = "auto", modded: int = 0):
     if STATE["running"]:
         return JSONResponse({"ok": False, "msg": "already running"})
-    threading.Thread(target=_run, args=(year, base, out, bool(keepname), bool(realignment), bool(rankings), bool(skipstats), bool(resign)), daemon=True).start()
+    resign = (console == "xbox360" and not bool(modded))
+    threading.Thread(target=_run, args=(year, base, out, bool(keepname), bool(realignment), bool(rankings), bool(skipstats), resign), kwargs={"platform": console}, daemon=True).start()
     return JSONResponse({"ok": True})
 
 
