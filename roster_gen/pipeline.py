@@ -72,7 +72,7 @@ def _detect_platform(base):
 
 
 def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
-        rankings=True, workers=10, skip_stats=False, platform="auto"):
+        rankings=True, workers=10, skip_stats=False, platform="auto", resign=False):
     season = year
     prior = year - 1
 
@@ -464,6 +464,23 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
     else:
         xsave.replace_db(new_db)
         out_save = xsave.save(out_dir)
+        resigned = False
+        if resign:
+            log("  Re-signing with Horizon (stock console support)...")
+            from roster_gen.xbox.resign import resign_with_horizon
+            from roster_gen.xbox.horizon import find_horizon
+            hr = find_horizon()
+            if hr is None:
+                log("    Horizon not found; output left rehashed (modded-console ready).")
+                log("    Stock console users: install Horizon and run 'roster-gen resign' on the file.")
+            else:
+                res = resign_with_horizon(out_save, horizon_path=hr, launch_gui=False)
+                log(f"    {res.message}")
+                if res.ok:
+                    log("    Re-signed successfully.")
+                    resigned = True
+                else:
+                    log("    Re-sign not completed automatically; follow the manual steps above.")
     _mark("Step 6: write save")
 
     elapsed = time.time() - _t0
@@ -482,7 +499,10 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         log("=== WHERE TO COPY ON YOUR XBOX 360 ===")
         log("Copy the 'Xbox360' folder to the ROOT of a FAT32 USB drive, then")
         log("copy the roster back to your 360's hard drive from Storage.")
-        log("Stock console? Rehash & Resign the file with Horizon first.")
+        if resigned:
+            log("This save was re-signed with Horizon: it should load on a stock console.")
+        else:
+            log("Stock console? Rehash & Resign the file with Horizon first.")
     log("Then launch NCAA Football 14.")
     log("")
     log(f"Total runtime: {_dur(elapsed)}")

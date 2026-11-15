@@ -84,15 +84,52 @@ def cmd_run(args):
         return 2
     base = args.base
     out = args.out
+    resign = getattr(args, "resign", False)
+    if getattr(args, "no_resign", False):
+        resign = False
+    elif not getattr(args, "resign", False):
+        # auto: resign if Horizon is available
+        from roster_gen.xbox.horizon import find_horizon
+        resign = find_horizon() is not None
     try:
         out_dir = run(args.year, base, out, rename=not args.keep_name, realignment=args.realignment,
                       rankings=not args.no_rankings, workers=args.workers, skip_stats=args.skip_stats,
-                      platform=args.platform)
+                      platform=args.platform, resign=resign)
         print(f"Output: {out_dir}")
         return 0
     except Exception as e:
         import traceback; traceback.print_exc()
         return 1
+
+
+def cmd_resign(args):
+    from roster_gen.xbox.resign import resign_with_horizon
+    from roster_gen.xbox.horizon import find_horizon
+    path = os.path.abspath(os.path.expanduser(args.file))
+    hr = args.horizon or None
+    if hr:
+        hr = os.path.abspath(os.path.expanduser(hr))
+    else:
+        hr = find_horizon()
+    res = resign_with_horizon(path, horizon_path=hr, launch_gui=not args.no_launch)
+    print(res.message)
+    if res.backup_path:
+        print(f"Backup: {res.backup_path}")
+    return 0 if res.ok or res.mode == "manual" else 1
+
+
+def cmd_check_horizon(args):
+    from roster_gen.xbox.horizon import find_horizon, horizon_version
+    hr = find_horizon()
+    if hr is None:
+        print("Horizon: NOT FOUND")
+        print("Set NCAA_HORIZON_PATH or install Horizon to enable stock-console re-signing.")
+        return 1
+    print(f"Horizon: {hr}")
+    v = horizon_version(hr)
+    if v:
+        print(f"Version: {v}")
+    return 0
 
 
 def main(argv=None):
@@ -118,7 +155,17 @@ def main(argv=None):
     sp.add_argument("--no-rankings", action="store_true", help="skip Top 25 ranking updates")
     sp.add_argument("--workers", type=int, default=10, help="number of parallel downloads (default 10)")
     sp.add_argument("--skip-stats", action="store_true", help="skip stats fetching (instant, uses priors only)")
+    sp.add_argument("--resign", action="store_true",
+                    help="re-sign the output with Horizon for stock consoles (auto if Horizon is installed)")
+    sp.add_argument("--no-resign", action="store_true", help="never re-sign; leave output rehashed only")
     sp.set_defaults(func=cmd_run)
+    sp = sub.add_parser("resign", help="re-sign an already generated Xbox 360 roster with Horizon")
+    sp.add_argument("file", help="path to a ROSTER-* file")
+    sp.add_argument("--horizon", default=None, help="path to Horizon executable (overrides detection)")
+    sp.add_argument("--no-launch", action="store_true", help="do not launch Horizon's GUI; print instructions only")
+    sp.set_defaults(func=cmd_resign)
+    sp = sub.add_parser("check-horizon", help="detect a Horizon installation")
+    sp.set_defaults(func=cmd_check_horizon)
     sp = sub.add_parser("serve", help="run the local web UI")
     sp.add_argument("--port", type=int, default=8765)
     sp.set_defaults(func=cmd_serve)

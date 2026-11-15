@@ -117,6 +117,25 @@ needs Microsoft's private key. So the output is *rehashed, not resigned*.
 If the console says the roster is damaged, it is almost always the signature:
 re-sign it with Horizon and try again.
 
+## Xbox 360 — choosing your path
+
+| Your console | Steps | Horizon needed? |
+|---|---|---|
+| **Modded (DashLaunch with `contpatch`)** | Generate → copy `Xbox360` folder to USB → copy to HDD → play. Same simplicity as PS3. | No |
+| **Stock** | Generate → (optional one-click re-sign if Horizon is installed) → copy to USB → Horizon *Rehash & Resign* if not already signed → copy to HDD → play. | Yes |
+
+- The generator always writes a **rehashed** save. It never ships or uses Microsoft's private key.
+- If Horizon is installed, the web UI and `roster-gen run --resign` re-sign automatically;
+  otherwise the file is left rehashed and you re-sign manually.
+- Detect your Horizon install with `roster-gen check-horizon` or set `NCAA_HORIZON_PATH`.
+
+### Re-signing an already generated file
+
+```bash
+roster-gen resign /path/to/ROSTER-ROSTER14
+roster-gen resign /path/to/ROSTER-ROSTER14 --horizon /path/to/Horizon.exe
+```
+
 ## What it does
 
 1. Reads the base save: decrypts `USR-DATA` on PS3, or unpacks the STFS
@@ -172,6 +191,7 @@ Environment variables:
 | `NCAA_OUT_DIR` | `~/Downloads/NCAA14RosterPack` |
 | `NCAA_WORK_DIR` | system temp dir + `/ncaa-roster-gen` |
 | `NCAA_CACHE_DIR` | `~/.cache/ncaa-roster-gen` |
+| `NCAA_HORIZON_PATH` | auto-detect (Horizon executable, for stock-console re-signing) |
 
 ## Troubleshooting
 

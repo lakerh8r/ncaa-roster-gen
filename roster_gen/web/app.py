@@ -12,12 +12,21 @@ DEFAULT_BASE = paths.DEFAULT_BASE
 DEFAULT_OUT = str(paths.DEFAULT_OUT)
 HOME = os.path.expanduser("~")
 
-STATE = {"running": False, "lines": [], "done": False, "output": "", "error": ""}
+def _horizon_path():
+    try:
+        from roster_gen.xbox.horizon import find_horizon
+        p = find_horizon()
+        return str(p) if p else ""
+    except Exception:
+        return ""
+
+STATE = {"running": False, "lines": [], "done": False, "output": "", "error": "", "horizon": _horizon_path()}
 
 
-def _run(year, base_dir, out_dir, keepname, realignment, rankings, skip_stats):
+def _run(year, base_dir, out_dir, keepname, realignment, rankings, skip_stats, resign=False):
     global STATE
-    STATE = {"running": True, "lines": [], "done": False, "output": "", "error": ""}
+    STATE = {"running": True, "lines": [], "done": False, "output": "", "error": "",
+             "horizon": _horizon_path()}
 
     def log(msg):
         STATE["lines"].append(str(msg))
@@ -26,7 +35,7 @@ def _run(year, base_dir, out_dir, keepname, realignment, rankings, skip_stats):
 
     try:
         from roster_gen.pipeline import run
-        out = run(year, base_dir, out_dir, log=log, rename=not keepname, realignment=realignment, rankings=rankings, workers=10, skip_stats=skip_stats)
+        out = run(year, base_dir, out_dir, log=log, rename=not keepname, realignment=realignment, rankings=rankings, workers=10, skip_stats=skip_stats, resign=resign)
         STATE["output"] = out
     except Exception as e:
         import traceback
@@ -113,7 +122,22 @@ INDEX = r"""<!doctype html>
     }
     setTimeout(poll, 1000);
   }
-  function start() {
+  function resignExisting() {
+    const f = prompt('Path to ROSTER-* file to re-sign:');
+    if (!f) return;
+    fetch('/resign?file=' + encodeURIComponent(f), {method:'POST'})
+      .then(r=>r.json()).then(d=>{ alert(d.msg); });
+  }
+  fetch('/horizon').then(r=>r.json()).then(d=>{
+    const el = document.getElementById('horizonStatus');
+    if (d.found) {
+      el.textContent = 'Horizon found: ' + d.path + '  (stock-console re-sign available)';
+      document.getElementById('resign').checked = true;
+    } else {
+      el.textContent = 'Horizon not found. Stock-console users: install Horizon or use a modded console with DashLaunch contpatch.';
+      document.getElementById('resign').disabled = true;
+    }
+  });
     const y = document.getElementById('year').value;
     const o = document.getElementById('out').value;
     const b = document.getElementById('base').value;
@@ -121,7 +145,8 @@ INDEX = r"""<!doctype html>
     const r = document.getElementById('realignment').checked ? 1 : 0;
     const rk = document.getElementById('rankings').checked ? 1 : 0;
     const ss = document.getElementById('skipstats').checked ? 1 : 0;
-    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+k+'&realignment='+r+'&rankings='+rk+'&skipstats='+ss, {method:'POST'});
+    const rs = document.getElementById('resign').checked ? 1 : 0;
+    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+k+'&realignment='+r+'&rankings='+rk+'&skipstats='+ss+'&resign='+rs, {method:'POST'});
     document.getElementById('status').textContent = 'Running...';
     setTimeout(poll, 500);
   }
@@ -146,7 +171,12 @@ INDEX = r"""<!doctype html>
   <label><input id="realignment" type="checkbox"> Apply 2026 conference realignment (may cause schedule freeze - experimental)</label>
   <label><input id="rankings" type="checkbox" checked> Update Top 25 rankings (AP + Coaches)</label>
   <label><input id="skipstats" type="checkbox"> Skip stats (instant, uses priors only)</label>
-  <p><button onclick="start()">Generate</button></p>
+  <label><input id="resign" type="checkbox"> Re-sign for stock console (uses Horizon if found)</label>
+  <p>
+    <button onclick="start()">Generate</button>
+    <button onclick="resignExisting()">Re-sign existing file...</button>
+  </p>
+  <p id="horizonStatus"></p>
   <p id="status"></p>
   <div id="log"></div>
 
@@ -171,14 +201,25 @@ def index():
 
 
 @app.post("/generate")
-def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int = 0, rankings: int = 1, skipstats: int = 0):
+def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int = 0, rankings: int = 1, skipstats: int = 0, resign: int = 0):
     if STATE["running"]:
         return JSONResponse({"ok": False, "msg": "already running"})
-    threading.Thread(target=_run, args=(year, base, out, bool(keepname), bool(realignment), bool(rankings), bool(skipstats)), daemon=True).start()
+    threading.Thread(target=_run, args=(year, base, out, bool(keepname), bool(realignment), bool(rankings), bool(skipstats), bool(resign)), daemon=True).start()
     return JSONResponse({"ok": True})
 
 
-@app.get("/browse")
+@app.post("/resign")
+def resign_endpoint(file: str):
+    try:
+        from roster_gen.xbox.resign import resign_with_horizon
+        from roster_gen.xbox.horizon import find_horizon
+        hr = find_horizon()
+        res = resign_with_horizon(file, horizon_path=hr, launch_gui=True)
+        return JSONResponse({"ok": res.ok or res.mode == "manual", "mode": res.mode,
+                            "msg": res.message, "backup": res.backup_path or ""})
+    except Exception as e:
+        import traceback
+        return JSONResponse({"ok": False, "msg": f"{e}\n{traceback.format_exc()}"})
 def browse(path: str = ""):
     # normalize
     if not path:
@@ -202,6 +243,13 @@ def browse(path: str = ""):
             files.append(e)
     parent = os.path.dirname(path) if path != "/" else None
     return JSONResponse({"path": path, "parent": parent, "dirs": dirs, "files": files})
+
+
+@app.get("/horizon")
+def horizon():
+    from roster_gen.xbox.horizon import find_horizon
+    p = find_horizon()
+    return JSONResponse({"found": bool(p), "path": str(p) if p else ""})
 
 
 @app.get("/status", response_class=JSONResponse)
