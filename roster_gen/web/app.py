@@ -180,26 +180,12 @@ INDEX = r"""<!doctype html>
     const saved = localStorage.getItem('ncaa_console');
     if (saved === 'ps3' || saved === 'xbox360') selectConsole(saved);
   } catch(e) {}
-    const y = document.getElementById('year').value;
-    const o = document.getElementById('out').value;
-    const b = document.getElementById('base').value;
-    const k = document.getElementById('keepname').checked ? 1 : 0;
-    const r = document.getElementById('realignment').checked ? 1 : 0;
-    const rk = document.getElementById('rankings').checked ? 1 : 0;
-    const ss = document.getElementById('skipstats').checked ? 1 : 0;
-    const console = (document.getElementById('btnPS3').classList.contains('active')) ? 'ps3' : 'xbox360';
-    const modded = (console === 'xbox360') ? (document.getElementById('moddedYes').checked ? 1 : 0) : 0;
-    const keepname = (console === 'ps3') ? (document.getElementById('keepname').checked ? 1 : 0) : 0;
-    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+keepname+'&realignment='+r+'&rankings='+rk+'&skipstats='+ss+'&console='+console+'&modded='+modded, {method:'POST'});
-    document.getElementById('status').textContent = 'Running...';
-    setTimeout(poll, 500);
-  }
 </script>
 </head>
 <body>
   <h1>NCAA Football 14 Roster Generator</h1>
 
-  <p id="consolePrompt" style="font-weight:bold;">What are you building for?</p>
+  <p id="consolePrompt" style="font-weight:bold;">Which console are you generating the roster for?</p>
   <div class="row" style="margin-bottom:1em;">
     <button id="btnPS3" onclick="selectConsole('ps3')">PlayStation 3</button>
     <button id="btnXbox" onclick="selectConsole('xbox360')">Xbox 360</button>
