@@ -139,6 +139,8 @@ INDEX = r"""<!doctype html>
     document.getElementById('panel').style.display = 'block';
     document.getElementById('ps3Opts').style.display = isPS3 ? 'block' : 'none';
     document.getElementById('xboxOpts').style.display = isPS3 ? 'none' : 'block';
+    document.getElementById('orLabel').style.display = isPS3 ? 'none' : 'inline';
+    document.getElementById('resignBtn').style.display = isPS3 ? 'none' : 'inline-block';
     document.getElementById('base').placeholder = isPS3 ? 'Browse to your BLUS-ROSTER-... save folder' : 'Browse to your ROSTER-ROSTER14 file';
     document.getElementById('baseHint').textContent = isPS3
       ? 'A folder containing PARAM.PFD and USR-DATA.'
@@ -229,7 +231,8 @@ INDEX = r"""<!doctype html>
     </details>
 
     <p><button onclick="start()">Generate</button>
-       <button onclick="resignExisting()">Re-sign existing file...</button></p>
+       <span id="orLabel" style="display:none;"> or </span>
+       <button id="resignBtn" style="display:none;" onclick="resignExisting()">Re-sign existing file...</button></p>
     <p id="status"></p>
     <div id="log"></div>
   </div>
