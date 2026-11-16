@@ -71,10 +71,20 @@ INDEX = r"""<!doctype html>
 <script>
   let activeField = null;
   let allowFiles = false;
+  let selectedConsole = null;
   async function openBrowse(fieldId) {
     activeField = fieldId;
-    allowFiles = fieldId === 'base';
-    document.getElementById('modalTitle').textContent = allowFiles ? 'Select PS3 save folder or Xbox 360 ROSTER-* file' : 'Select folder';
+    if (fieldId === 'out') {
+      allowFiles = false;
+    } else {
+      allowFiles = (selectedConsole === 'xbox360');
+    }
+    let title = 'Select folder';
+    if (fieldId === 'out') title = 'Select output folder';
+    else if (selectedConsole === 'ps3') title = 'Select PS3 save folder';
+    else if (selectedConsole === 'xbox360') title = 'Select Xbox 360 ROSTER-* file';
+    else title = 'Select base save (folder or file)';
+    document.getElementById('modalTitle').textContent = title;
     const cur = document.getElementById(fieldId).value || '__HOME__';
     document.getElementById('modal').style.display = 'block';
     await loadDir(cur);
@@ -133,6 +143,7 @@ INDEX = r"""<!doctype html>
     setTimeout(poll, 1000);
   }
   function selectConsole(c) {
+    selectedConsole = c;
     const isPS3 = c === 'ps3';
     document.getElementById('btnPS3').classList.toggle('active', isPS3);
     document.getElementById('btnXbox').classList.toggle('active', !isPS3);
