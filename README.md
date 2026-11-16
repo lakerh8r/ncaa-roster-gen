@@ -273,6 +273,68 @@ roster-gen resign /path/to/ROSTER-ROSTER14
 roster-gen resign /path/to/ROSTER-ROSTER14 --horizon /path/to/Horizon.exe
 ```
 
+## Using with emulators
+
+The generated saves are standard PS3/Xbox 360 save files, so they also work in
+emulators. No code changes are needed — just copy the files into the
+emulator's save directory.
+
+### RPCS3 (PlayStation 3) — recommended
+
+RPCS3 is the most mature emulator for NCAA Football 14 and the easiest path
+for testing generated rosters.
+
+RPCS3 data directory:
+
+| OS | Path |
+|---|---|
+| Linux | `~/.config/rpcs3/` |
+| Windows | `%APPDATA%\rpcs3\` |
+| macOS | `~/Library/Application Support/rpcs3/` |
+
+Saves live at:
+```
+<rpcs3 data dir>/dev_hdd0/home/00000001/savedata/<save folder>/
+```
+(8-digit user ID — `00000001`, not `0000001`.)
+
+**Copy steps (Linux example):**
+
+```bash
+RPCS3="$HOME/.config/rpcs3"
+SAVEDATA="$RPCS3/dev_hdd0/home/00000001/savedata"
+mkdir -p "$SAVEDATA/BLUS31159-ROSTER-2026"
+cp ~/Downloads/NCAA14RosterPack/PS3/SAVEDATA/BLUS31159-ROSTER-2026/*    "$SAVEDATA/BLUS31159-ROSTER-2026/"
+```
+
+The folder name must match between source and destination. The files to copy
+are `PARAM.SFO`, `PARAM.PFD`, `USR-DATA` (and `ICON0.PNG`/`HED-DATA` if
+present).
+
+**Using RPCS3 as the base save:** put your base PS3 save folder in
+`dev_hdd0/home/00000001/savedata/` first, then point the tool's *Base save*
+at that folder. Set *Output folder* to anywhere convenient, generate, then copy
+the output's `PS3/SAVEDATA/<name>/` contents back into the same savedata
+folder (overwriting).
+
+**Notes:**
+- RPCS3's default user is `00000001`. Build from a base save that already
+  loads in RPCS3 (its account ID will match).
+- No USB step — just file copy.
+- Gameplay performance depends on your CPU/GPU, not the save.
+
+### Xenia (Xbox 360) — experimental
+
+Xenia mounts STFS containers from its content directory. The tool's Xbox output
+(`Xbox360/Content/<XUID>/454109B6/00000001/ROSTER-ROSTER14`) maps onto
+Xenia's content layout, but Xenia's save handling is less mature than RPCS3's.
+Most users running NCAA Football 14 on PC use RPCS3 (PS3 path) instead.
+
+If you try Xenia: place the `Xbox360/Content/...` tree under Xenia's content
+directory and ensure the profile XUID matches Xenia's user profile.
+
+---
+
 ## What it does
 
 1. Reads the base save: decrypts `USR-DATA` on PS3, or unpacks the STFS
