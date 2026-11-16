@@ -167,9 +167,8 @@ INDEX = r"""<!doctype html>
     const rk = document.getElementById('rankings').checked ? 1 : 0;
     const ss = document.getElementById('skipstats').checked ? 1 : 0;
     const console = (document.getElementById('btnPS3').classList.contains('active')) ? 'ps3' : 'xbox360';
-    const modded = (console === 'xbox360') ? (document.getElementById('moddedYes').checked ? 1 : 0) : 0;
     const keepname = (console === 'ps3') ? (document.getElementById('keepname').checked ? 1 : 0) : 0;
-    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+keepname+'&realignment='+r+'&rankings='+rk+'&skipstats='+ss+'&console='+console+'&modded='+modded, {method:'POST'});
+    fetch('/generate?year='+y+'&out='+encodeURIComponent(o)+'&base='+encodeURIComponent(b)+'&keepname='+keepname+'&realignment='+r+'&rankings='+rk+'&skipstats='+ss+'&console='+console, {method:'POST'});
     document.getElementById('status').textContent = 'Running...';
     setTimeout(poll, 500);
   }
@@ -228,9 +227,6 @@ INDEX = r"""<!doctype html>
     </div>
 
     <div id="xboxOpts" style="display:none;">
-      <p style="margin:0.5em 0;">Is your Xbox 360 modded? (DashLaunch with contpatch)</p>
-      <label><input type="radio" name="modded" value="1" id="moddedYes"> Yes — modded console (no extra steps)</label><br>
-      <label><input type="radio" name="modded" value="0" id="moddedNo" checked> No — stock console</label>
       <p id="horizonStatus" style="font-size:0.85em; color:#555; margin:0.3em 0;"></p>
     </div>
 
@@ -269,10 +265,10 @@ def index():
 
 
 @app.post("/generate")
-def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int = 0, rankings: int = 1, skipstats: int = 0, console: str = "auto", modded: int = 0):
+def generate(year: int, out: str, base: str, keepname: int = 0, realignment: int = 0, rankings: int = 1, skipstats: int = 0, console: str = "auto"):
     if STATE["running"]:
         return JSONResponse({"ok": False, "msg": "already running"})
-    resign = (console == "xbox360" and not bool(modded))
+    resign = (console == "xbox360")
     threading.Thread(target=_run, args=(year, base, out, bool(keepname), bool(realignment), bool(rankings), bool(skipstats), resign), kwargs={"platform": console}, daemon=True).start()
     return JSONResponse({"ok": True})
 

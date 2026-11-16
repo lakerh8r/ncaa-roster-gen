@@ -72,7 +72,7 @@ def _detect_platform(base):
 
 
 def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
-        rankings=True, workers=10, skip_stats=False, platform="auto", resign=False):
+        rankings=True, workers=10, skip_stats=False, platform="auto", resign=True):
     season = year
     prior = year - 1
 

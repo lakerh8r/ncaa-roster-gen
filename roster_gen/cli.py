@@ -84,13 +84,7 @@ def cmd_run(args):
         return 2
     base = args.base
     out = args.out
-    resign = getattr(args, "resign", False)
-    if getattr(args, "no_resign", False):
-        resign = False
-    elif not getattr(args, "resign", False):
-        # auto: resign if Horizon is available
-        from roster_gen.xbox.horizon import find_horizon
-        resign = find_horizon() is not None
+    resign = True
     try:
         out_dir = run(args.year, base, out, rename=not args.keep_name, realignment=args.realignment,
                       rankings=not args.no_rankings, workers=args.workers, skip_stats=args.skip_stats,
@@ -155,9 +149,6 @@ def main(argv=None):
     sp.add_argument("--no-rankings", action="store_true", help="skip Top 25 ranking updates")
     sp.add_argument("--workers", type=int, default=10, help="number of parallel downloads (default 10)")
     sp.add_argument("--skip-stats", action="store_true", help="skip stats fetching (instant, uses priors only)")
-    sp.add_argument("--resign", action="store_true",
-                    help="re-sign the output with Horizon for stock consoles (auto if Horizon is installed)")
-    sp.add_argument("--no-resign", action="store_true", help="never re-sign; leave output rehashed only")
     sp.set_defaults(func=cmd_run)
     sp = sub.add_parser("resign", help="re-sign an already generated Xbox 360 roster with Horizon")
     sp.add_argument("file", help="path to a ROSTER-* file")

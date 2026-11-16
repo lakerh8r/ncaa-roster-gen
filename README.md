@@ -170,28 +170,18 @@ Leave the default or pick another. The tool creates an
 
 Type the season, e.g. `2026`.
 
-### 6. "Is your Xbox 360 modded? (DashLaunch with contpatch)"
-
-- **Yes - modded console** -> choose this if your 360 runs DashLaunch with
-  `contpatch`. The generated file loads directly; no extra steps.
-- **No - stock console** -> choose this if your console is unmodified. The
-  tool re-signs the file with Horizon if it's installed; otherwise you re-sign
-  manually (see below).
-
-### 7. Advanced options (optional)
-
-Same as PS3 (realignment, Top 25, skip stats).
-
-### 8. Generate
+### 6. Generate
 
 Click **Generate**. Takes ~1-3 minutes. When finished you'll see
 `Done! Output: ...` and `Total runtime: ...`.
 
-You'll also see either:
-- "This save was re-signed with Horizon: it should load on a stock console." (if re-signed), or
-- "Stock console? Rehash & Resign the file with Horizon first." (if not).
+If Horizon is installed, the tool re-signs automatically and the log ends
+with "This save was re-signed with Horizon: it should load on a stock console."
+Otherwise you'll see "Stock console? Rehash & Resign the file with Horizon
+first." — install Horizon and run `roster-gen resign <file>` (or use the UI's
+**Re-sign existing file...** button).
 
-### 9. Copy to your Xbox 360
+### 7. Copy to your Xbox 360
 
 See [Copying the save to your Xbox 360](#copying-the-save-to-your-xbox-360) below:
 copy the `Xbox360` folder to the **root** of a **FAT32** USB drive, then on
@@ -206,10 +196,9 @@ another machine). You do not run both buttons together.
 
 ### If the console says the roster is damaged or doesn't list it
 
-That's the signature. On a stock console, re-sign with Horizon (or install
-Horizon and re-run Generate). On a modded console, make sure DashLaunch
-`contpatch` is enabled and reboot. Also try *System Settings -> Storage -> USB
--> Configure Now* so the drive gets indexed.
+That's the signature. Re-sign with Horizon (or install Horizon and re-run
+Generate). Also try *System Settings -> Storage -> USB -> Configure Now* so
+the drive gets indexed.
 
 ### Tips
 
@@ -252,29 +241,30 @@ The generator writes the same layout the console uses on a USB drive:
 ### Signing (read this)
 
 The generator rebuilds the save's SHA-1 hash tree but **cannot re-sign it**: that
-needs Microsoft's private key. So the output is *rehashed, not resigned*.
+needs Microsoft's private key. So the output is *rehashed, not resigned* by
+default.
 
-- **Modded console with DashLaunch:** enable `contpatch` and the rehashed file
-  loads directly.
-- **Stock console:** run the generated `ROSTER-ROSTER14` through **Horizon**
-  (free Windows tool) and use **Rehash & Resign**, then copy it to the USB drive.
+- If Horizon is installed, the tool re-signs automatically (Generate → copy →
+  play).
+- Otherwise, run the generated `ROSTER-ROSTER14` through **Horizon** (free
+  Windows tool) and use **Rehash & Resign**, then copy it to the USB drive.
   Horizon's re-signing reuses your own profile, so run it while the file sits in
   the `<XUID>` folder created by the generator.
 
 If the console says the roster is damaged, it is almost always the signature:
 re-sign it with Horizon and try again.
 
-## Xbox 360 — choosing your path
+## Xbox 360 — how it works
 
-| Your console | Steps | Horizon needed? |
-|---|---|---|
-| **Modded (DashLaunch with `contpatch`)** | Generate → copy `Xbox360` folder to USB → copy to HDD → play. Same simplicity as PS3. | No |
-| **Stock** | Generate → (optional one-click re-sign if Horizon is installed) → copy to USB → Horizon *Rehash & Resign* if not already signed → copy to HDD → play. | Yes |
+The generator always writes a **rehashed** save. It never ships or uses
+Microsoft's private key.
 
-- The generator always writes a **rehashed** save. It never ships or uses Microsoft's private key.
-- If Horizon is installed, the web UI and `roster-gen run --resign` re-sign automatically;
-  otherwise the file is left rehashed and you re-sign manually.
-- Detect your Horizon install with `roster-gen check-horizon` or set `NCAA_HORIZON_PATH`.
+- If Horizon is installed, the web UI and `roster-gen run` re-sign
+  automatically; the result loads on a stock console with no extra steps.
+- If Horizon is not installed, the file is left rehashed and you re-sign
+  manually with Horizon (*Rehash & Resign*) before copying to the console.
+- Detect your Horizon install with `roster-gen check-horizon` or set
+  `NCAA_HORIZON_PATH`.
 
 ### Re-signing an already generated file
 
@@ -354,9 +344,9 @@ Environment variables:
   fresh, or check your connection. Players without an ESPN stats page are cached
   and skipped instead of retried.
 - **Xbox 360 says the roster is damaged / won't load:** the tool rehashes but
-  cannot re-sign (no Microsoft private key). On a stock console, run the output
-  through Horizon's *Rehash & Resign*; on a modded console, enable DashLaunch
-  `contpatch`. See [Copying the save to your Xbox 360](#copying-the-save-to-your-xbox-360).
+  cannot re-sign (no Microsoft private key). Install Horizon and re-run
+  Generate (auto re-sign), or run `roster-gen resign <file>`.
+  See [Copying the save to your Xbox 360](#copying-the-save-to-your-xbox-360).
 - **Xbox 360 roster doesn't appear in Storage:** make sure the USB drive is
   FAT32 and that you copied the whole `Xbox360` folder to its root. The file
   must stay inside `Content/<XUID>/454109B6/00000001/`.
