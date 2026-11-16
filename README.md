@@ -73,6 +73,153 @@ says it can't find `py`, use `python` or `python3` instead.
 If you already use **WSL**, install Ubuntu from the Microsoft Store and follow
 the Linux steps above instead.
 
+## Walkthrough: PlayStation 3 (beginner)
+
+Follow these steps end to end. You only need to do the install part once.
+
+### 1. Install
+
+- **Linux/macOS:** `./setup.sh` then `./launch.sh`.
+- **Windows:** double-click `launch.bat`.
+
+Your browser opens to **NCAA Football 14 Roster Generator**.
+
+### 2. Pick your console
+
+Click the big **PlayStation 3** button. (The page remembers this choice.)
+
+### 3. Base save
+
+- Click **Browse...** next to *Base save*.
+- Navigate to your PS3 roster save folder (the one containing `PARAM.PFD` and
+  `USR-DATA`, e.g. `BLUS31159-ROSTER-SOMETHING`) and click **Select this folder**.
+- A small "Detected: PS3" badge appears.
+
+### 4. Output folder
+
+Leave the default (`~/Downloads/NCAA14RosterPack`) or click **Browse...** to
+choose another.
+
+### 5. Season start year
+
+Type the season, e.g. `2026`. If ESPN has no stats for that year yet, the tool
+falls back to the prior season automatically (you'll see a warning in the log).
+
+### 6. Keep original save name
+
+Leave **Keep original save name (recommended — PS3 rejects renamed saves)**
+checked. This is the configuration that loads reliably on PS3.
+
+### 7. Advanced options (optional)
+
+Click **Advanced options** to expand:
+- *Apply 2026 conference realignment* — leave off unless you want it
+  (experimental; may freeze schedule generation).
+- *Update Top 25 rankings (AP + Coaches)* — leave checked.
+- *Skip stats (instant, uses priors only)* — check only for a fast test run.
+
+### 8. Generate
+
+Click **Generate**. A live log fills in: team mapping, scraping, rating,
+writing, encrypting. A full run takes ~2-3 minutes the first time (~40 s
+after that, because ESPN responses are cached). When finished you'll see
+`Done! Output: ...` and `Total runtime: ...`.
+
+### 9. Copy to your PS3
+
+See [Copying the save to your PS3](#copying-the-save-to-your-ps3) below:
+USB root `PS3` folder, then *Game -> Save Data Utility (PS3)*, or FTP into
+`/dev_hdd0/home/00000001/savedata/`.
+
+Then launch NCAA Football 14 and load the roster.
+
+### Tips
+
+- **PS3 error 8001051C (corrupted data):** make sure *Keep original save name*
+  is checked.
+- **Save belongs to another user:** build from a base save that already loads
+  on your PS3 (the output keeps the base save's account ID).
+- **A team shows generic players:** ESPN had no roster page for that school;
+  the tool kept the base players. Logged as `no ESPN roster for <team>`.
+
+---
+
+## Walkthrough: Xbox 360 (beginner)
+
+### 1. Install
+
+Same as above (`./setup.sh` / `launch.bat`).
+
+### 2. Pick your console
+
+Click the big **Xbox 360** button.
+
+### 3. Base save
+
+- Click **Browse...** next to *Base save*.
+- Navigate to your `ROSTER-ROSTER14` file (or any `ROSTER-*`) copied off your
+  Xbox 360 USB drive and **click the file itself**. The path fills in.
+- A small "Detected: Xbox 360" badge appears.
+
+### 4. Output folder
+
+Leave the default or pick another. The tool creates an
+`Xbox360/Content/...` tree inside it.
+
+### 5. Season start year
+
+Type the season, e.g. `2026`.
+
+### 6. "Is your Xbox 360 modded? (DashLaunch with contpatch)"
+
+- **Yes - modded console** -> choose this if your 360 runs DashLaunch with
+  `contpatch`. The generated file loads directly; no extra steps.
+- **No - stock console** -> choose this if your console is unmodified. The
+  tool re-signs the file with Horizon if it's installed; otherwise you re-sign
+  manually (see below).
+
+### 7. Advanced options (optional)
+
+Same as PS3 (realignment, Top 25, skip stats).
+
+### 8. Generate
+
+Click **Generate**. Takes ~1-3 minutes. When finished you'll see
+`Done! Output: ...` and `Total runtime: ...`.
+
+You'll also see either:
+- "This save was re-signed with Horizon: it should load on a stock console." (if re-signed), or
+- "Stock console? Rehash & Resign the file with Horizon first." (if not).
+
+### 9. Copy to your Xbox 360
+
+See [Copying the save to your Xbox 360](#copying-the-save-to-your-xbox-360) below:
+copy the `Xbox360` folder to the **root** of a **FAT32** USB drive, then on
+the console copy the roster to the hard drive from Storage, then launch
+NCAA Football 14.
+
+### "or Re-sign existing file..."
+
+The second button is independent of Generate. Use it only if you already have a
+generated `ROSTER-*` file and want to re-sign it (e.g. after moving it to
+another machine). You do not run both buttons together.
+
+### If the console says the roster is damaged or doesn't list it
+
+That's the signature. On a stock console, re-sign with Horizon (or install
+Horizon and re-run Generate). On a modded console, make sure DashLaunch
+`contpatch` is enabled and reboot. Also try *System Settings -> Storage -> USB
+-> Configure Now* so the drive gets indexed.
+
+### Tips
+
+- **USB drive must be FAT32.**
+- **First run is slow** (~2-3 min); later runs ~30-60 s (cached).
+- **"No 2026 stats found" warning** is normal before a season starts.
+- **A team shows generic players:** ESPN had no roster page; base players kept.
+
+---
+
 ## Copying the save to your PS3
 
 The generator writes:
