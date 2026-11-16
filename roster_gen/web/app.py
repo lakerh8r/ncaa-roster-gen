@@ -314,6 +314,31 @@ def browse(path: str = ""):
     return JSONResponse({"path": path, "parent": parent, "dirs": dirs, "files": files})
 
 
+@app.get("/browse")
+def browse(path: str = ""):
+    if not path:
+        path = HOME
+    path = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isdir(path):
+        path = os.path.dirname(path) or "/"
+    if not os.path.isdir(path):
+        path = "/"
+    try:
+        entries = sorted(os.listdir(path))
+    except PermissionError:
+        entries = []
+    dirs = []
+    files = []
+    for e in entries:
+        full = os.path.join(path, e)
+        if os.path.isdir(full):
+            dirs.append(e)
+        else:
+            files.append(e)
+    parent = os.path.dirname(path) if path != "/" else None
+    return JSONResponse({"path": path, "parent": parent, "dirs": dirs, "files": files})
+
+
 @app.get("/horizon")
 def horizon():
     from roster_gen.xbox.horizon import find_horizon
