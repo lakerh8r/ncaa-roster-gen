@@ -493,6 +493,8 @@ def run(year, base_dir, out_dir=None, log=print, rename=True, realignment=False,
         log("  Then on PS3: Game -> Save Data Utility (PS3) -> copy from USB to HDD.")
         log("FTP: upload the save folder into /dev_hdd0/home/00000001/savedata/")
         log("  (skip the PS3/SAVEDATA wrapper for FTP)")
+        log("Emulator (RPCS3): copy only the BLUS... folder into")
+        log("  dev_hdd0/home/00000001/savedata/ (no PS3/SAVEDATA wrapper).")
     else:
         log(f"Save file: {out_save}")
         log("")

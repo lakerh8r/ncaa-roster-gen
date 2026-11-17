@@ -311,6 +311,20 @@ The folder name must match between source and destination. The files to copy
 are `PARAM.SFO`, `PARAM.PFD`, `USR-DATA` (and `ICON0.PNG`/`HED-DATA` if
 present).
 
+**Important — do not copy the `PS3/` or `SAVEDATA/` wrapper folders.** The tool
+outputs `PS3/SAVEDATA/BLUS31159-ROSTER-2026/` for USB copy to a *real* PS3.
+For RPCS3, copy only the inner `BLUS31159-ROSTER-2026/` folder (or its
+contents) into `dev_hdd0/home/00000001/savedata/`. If you copy the `PS3/` or
+`SAVEDATA/` folders by mistake, the game will silently show the original
+roster because the save never lands in the right place.
+
+Layout reference:
+
+```
+Tool output:        <out>/PS3/SAVEDATA/BLUS31159-ROSTER-2026/{PARAM.SFO, PARAM.PFD, USR-DATA, ...}
+RPCS3 destination:  dev_hdd0/home/00000001/savedata/BLUS31159-ROSTER-2026/{PARAM.SFO, PARAM.PFD, USR-DATA, ...}
+```
+
 **Using RPCS3 as the base save:** put your base PS3 save folder in
 `dev_hdd0/home/00000001/savedata/` first, then point the tool's *Base save*
 at that folder. Set *Output folder* to anywhere convenient, generate, then copy
@@ -412,7 +426,10 @@ Environment variables:
 - **Xbox 360 roster doesn't appear in Storage:** make sure the USB drive is
   FAT32 and that you copied the whole `Xbox360` folder to its root. The file
   must stay inside `Content/<XUID>/454109B6/00000001/`.
-- **A team ends up with generic players:** ESPN occasionally has no roster page
+- **RPCS3 shows the original roster after copying:** you likely copied the
+  `PS3/` or `SAVEDATA/` wrapper folders. Copy only the inner `BLUS...` folder
+  into `dev_hdd0/home/00000001/savedata/`. See
+  [Using with emulators](#using-with-emulators).
   for a school (seen with Texas, Illinois, UMass, and Idaho at some points in
   the offseason). The generator logs `no ESPN roster for <team>; keeping base
   players` and leaves that team's existing players alone rather than writing
