@@ -429,7 +429,11 @@ Environment variables:
 - **RPCS3 shows the original roster after copying:** you likely copied the
   `PS3/` or `SAVEDATA/` wrapper folders. Copy only the inner `BLUS...` folder
   into `dev_hdd0/home/00000001/savedata/`. See
-  [Using with emulators](#using-with-emulators).
+  [Using with emulators](#using-with-emulators). If it still shows the
+  original: restart RPCS3 (it caches saves), verify USR-DATA is 1,433,600
+  bytes, and load via *Settings → File Management → Load & Delete → Roster*.
+  Check the RPCS3 log for PFD/account-ID errors.
+- **A team ends up with generic players:** ESPN occasionally has no roster page
   for a school (seen with Texas, Illinois, UMass, and Idaho at some points in
   the offseason). The generator logs `no ESPN roster for <team>; keeping base
   players` and leaves that team's existing players alone rather than writing
